@@ -1,4 +1,4 @@
-"""研究分析师：先写底稿，再只从底稿抽封面。没有搜索工具，不许改假设。"""
+"""研究分析师：先写底稿，再只从底稿抽封面。没有搜索工具。"""
 
 from __future__ import annotations
 
@@ -34,11 +34,15 @@ class DossierDraft(BaseModel):
     markdown: str = Field(description="完整 Markdown 底稿，含六个中文章节，文末只有一次免责声明")
 
 
+class CoverPoint(BaseModel):
+    title: str = Field(description="短标题，机制或结构，不超过16字")
+    text: str = Field(description="一句带锁定数字的完整论据，必须能在底稿里找到")
+
+
 class CoverDraft(BaseModel):
-    background: str = Field(description="公司做什么、核心分部。必须能在底稿里找到原句或压缩句")
-    thesis: str = Field(description="主线 + 与市场的分歧 + 目标价口径。必须来自底稿")
-    outlook: str = Field(description="未来三年核心看什么。必须来自底稿")
-    risks: list[str] = Field(description="三条能打穿逻辑的风险，来自底稿")
+    thesis: list[CoverPoint] = Field(description="投资逻辑分点：短标题 + 论据")
+    outlook: list[CoverPoint] = Field(description="未来展望分点：短标题 + 论据")
+    risks: list[CoverPoint] = Field(description="主要风险分点：短标题 + 论据")
 
 
 @dataclass
@@ -71,36 +75,31 @@ def _dossier_instructions(ctx: RunContext[AnalystDeps]) -> str:
         gap_line = (
             "各年相对一致预期的绝对偏差都不大于 15%。"
             "投资逻辑里写清哪一年营收或利润略高还是略低。"
-            "禁止写综合各方，也不要写「方向一致、幅度更保守/更积极」这种填空。"
         )
     core = "、".join(deps.snapshot.get("core_segments") or []) or "核心分部"
     tail = "、".join(deps.snapshot.get("tail_segments") or []) or "其余分部"
     fcst_years = "、".join(deps.snapshot.get("forecast_periods") or []) or "预测年"
     houses = "、".join(item.get("name") or "" for item in deps.snapshot.get("bibliography") or []) or "一致预期样本券商"
-    return f"""你是{deps.label}的卖方公司点评分析师。根据注入的模型结果写一篇有立场的点评，不是说明书，不是工程日志。
+    return f"""你是{deps.label}的卖方公司点评分析师。根据注入的模型结果写一篇有立场的点评。
 
-数字已经锁死。营收、EPS、毛利率、费用率、目标PE、目标价、上行空间、评级必须用注入的 display 数字，不得另造，不得四舍五入成另一套。
+数字已经锁死。营收、EPS、毛利率、费用率、目标PE、目标价、较现价空间、评级必须用注入的 display 数字。
 评级必须是「{display['rating']}」，目标价 {display['target_price']} 元，预测首年 EPS {display['eps_y1']} 元，目标PE {display['target_pe']} 倍。
-不许改增速、费率、同业池、目标价。
 
-全文大约 2000–3000 字。表最多三张：共识对照、盈利简表、同业 PE。营收亿元一位小数，EPS 两位，PE 一位，增速百分数一位。
-券商一律用简称，例如广发证券，禁止写股份有限公司、有限公司。正文可以点名 {houses}，但不要加 [1][2] 这种引用角标。不要写数据来源、参考文献、研报标题列表。
+券商用简称，例如广发证券。正文只点名 {houses}，文末只留一次免责声明。
+表最多三张：共识对照、盈利简表、同业 PE。营收亿元一位小数，EPS 两位，PE 一位，增速百分数一位。
 
-正文必须且只按这个目录，大标题写成「## 一、投资要点」这种中文序号。节内用「### 小标题」做主题结构，不要用年份当小标题。
-1. 投资要点：先写评级、目标价、相对现价空间，再三句为什么是这个判断，再放三年模型营收/EPS vs 一致预期的小表。可用 ### 评级与判断。表前不要把三年营收、归母、EPS再念一遍。
-2. 投资逻辑：必须有 ### 主线、### 分歧归因、### 与市场的分歧、### 目标价口径。按主线写，不要按年做小标题。主线讲公司现在靠什么赚钱、收入和利润由哪条业务抬。分歧归因必须先写资料时效和口径，再写剩下的经营观点；禁止直接写「我们更谨慎」。分歧用一两段写收入更高还是更低、利润更高还是更低、差在哪个分部或利润率；{fcst_years} 的数字写进句子里。{gap_line}
-3. 业务展望：按分部设小标题，不要按年切片。先 ### 收入结构。核心分部是 {core}，每个核心分部一个 ### 标题，下面写产品和订单，以及未来三年量、价或增速怎么走、相对卖方松还是紧。三年路径放在同一段。尾部分部 {tail} 合成一个 ###。
-4. 盈利预测：先放一张历史+预测简表，再用 ### 拐点与斜率 按机制写：毛利率、费用率、利润是否快于收入、相对一致预期。不要再按年开三段。
-5. 估值与评级：### 同业选取、### 目标价与评级。同业为什么这几家（业务优先，不能只因 PE 高剔除）、目标 PE 取均值（或调整）的理由、目标价是当前合理价格（首年 EPS × 目标 PE），并对照现价隐含 EPS。数字必须等于注入结果。
-6. 主要风险：恰好 3 条能打穿上述逻辑的（订单/爬坡/估值），每条写触发情景和对盈利或目标价的方向。不要写「市场风险」。不要写第七章。
+正文按这个目录，大标题写成「## 一、投资要点」这种中文序号。小标题写主题或分部名，三年路径写在同一段。
+1. 投资要点：先写评级、目标价、相对现价空间，再三句为什么是这个判断，数字放进三年模型营收/EPS vs 一致预期的小表。可用 ### 评级与判断。
+2. 投资逻辑：必须有 ### 主线、### 分歧归因、### 与市场的分歧、### 目标价口径。主线、分歧和目标价口径用编号分点：每条先写不超过16字的短标题，再写一句带锁定数字的论据。短标题是机制或结构（谁赚钱、哪块放量、和一致预期差在哪、估值口径），一条一个完整判断。分歧归因先写资料时效和口径，再写收入或利润差在哪个分部或利润率；{fcst_years} 的数字写进句子里。{gap_line}
+3. 业务展望：按分部设小标题。先 ### 收入结构。核心分部是 {core}，每个核心分部一个 ### 标题，下面用同样的「短标题 + 一句带数字的三年路径」。尾部分部 {tail} 合成一个 ###。
+4. 盈利预测：先放一张历史+预测简表，再用 ### 拐点与斜率 按机制写：毛利率、费用率、利润是否快于收入、相对一致预期。
+5. 估值与评级：### 同业选取、### 目标价与评级。同业为什么这几家（业务优先）、目标 PE 取均值（或调整）的理由、目标价是当前合理价格（首年 EPS × 目标 PE），并对照现价隐含 EPS。数字必须等于注入结果。
+6. 主要风险：分点写能打穿上述逻辑的判断。每条「短标题。触发情景和对盈利或目标价的方向」。六章写完即止。
 
-禁止用「**2026E：**」或段首「2026E：」或「### 2026E」这种年份小标题。小标题只写主题，例如主线、云计算、拐点与斜率。
+小标题写主题，例如主线、云计算、拐点与斜率。买入/观察是结论，理由写业务和盈利。
 
 文末单独引用块，且全文只出现一次：
 > {DISCLAIMER}
-
-禁止出现：事件发酵、final_rationale、pe_adjust、thin、单元格公式、数据缺口、综合各方、【事件发酵】、股份有限公司、年报主营构成、拆分计划确认后的历史检索、数据来源。
-不要把卡片标题搬进正文。不要写「因此买入，因为上行空间≥15%」这种复述判定公式的句子；买入/观察是结论，理由写业务和盈利。
 """
 
 
@@ -117,13 +116,12 @@ cover_agent = Agent(
     retries=0,
     instructions=(
         "你只读已经写好的研究底稿，抽出 Excel 总结页要用的封面字段。"
-        "不要新编故事，不要新造数字，不要补充底稿里没有的机构。"
-        "每个字段尽量复制底稿里已经出现的连续句子，不要改写成另一套说法。"
-        "background 压缩自投资要点/业务展望：公司做什么、核心分部。"
-        "thesis 压缩自投资逻辑/估值：主线、与市场的分歧、目标价口径。"
-        "outlook 压缩自业务展望/盈利预测：未来三年核心看什么。"
-        "risks 三条，尽量用底稿原句。"
-        "不要抽数据来源，不要编机构名单。"
+        "thesis、outlook、risks 都写成 {title, text} 列表。条数按材料来。"
+        "title 是机制短标题，不超过16字；text 是一句带锁定数字的完整论据，必须能在底稿里找到。"
+        "按判断拆点，不要按句号把一段话切成碎句。"
+        "thesis 从投资逻辑抽：谁赚钱、哪块弹性、和一致预期差在哪、目标价怎么取。"
+        "outlook 从业务展望或盈利预测抽：按分部或毛利率机制。"
+        "risks 从主要风险抽：保留风险名和对盈利或目标价的方向。"
         f"章节名是：{'、'.join(CHAPTERS)}。"
     ),
 )
@@ -193,7 +191,7 @@ def _extract_cover(deps: AnalystDeps, markdown: str, chat) -> tuple[dict, list[s
             last_errors = validate_cover_against(markdown, notes)
             if not last_errors:
                 return notes, []
-            hint = "请逐句复制底稿原句，不要改写。不合法：" + "；".join(last_errors)
+            hint = "每条写短标题加一句带数字的论据，按判断拆点。不合法：" + "；".join(last_errors)
     notes = require_summary_notes(_fallback_cover(markdown, deps.snapshot))
     last_errors = validate_cover_against(markdown, notes)
     if not last_errors:
@@ -212,7 +210,7 @@ def format_pack(snapshot: dict, spec: dict) -> str:
             "评级": display["rating"],
             "目标价_元": display["target_price"],
             "现价_元": display["price"],
-            "上行空间_百分数": display["upside_pct"],
+            "较现价空间_百分数": display["upside_pct"],
             "目标PE": display["target_pe"],
             "核心池PE均值": display["pe_mean"],
             "预测首年": snapshot["y1"],
@@ -268,7 +266,7 @@ def format_pack(snapshot: dict, spec: dict) -> str:
 
 def _dossier_user(deps: AnalystDeps, hint: str) -> str:
     text = (
-        "不要检索。不要改数字。用下面这份材料写底稿。\n"
+        "用下面这份材料写底稿。数字已经锁死。\n"
         f"{deps.pack_text}\n"
     )
     if hint:
@@ -286,7 +284,7 @@ def _cover_user(markdown: str) -> str:
         if len(body) > cap:
             body = body[:cap]
         chunks.append(f"## {title}\n{body}")
-    return "只根据下面这篇底稿抽封面，不要另编：\n\n" + "\n\n".join(chunks)
+    return "只根据下面这篇底稿抽封面。每条 {title, text}，短标题是机制，正文是带数字的论据：\n\n" + "\n\n".join(chunks)
 
 
 def _persist_draft(deps: AnalystDeps, markdown: str) -> None:
@@ -300,37 +298,31 @@ def _persist_draft(deps: AnalystDeps, markdown: str) -> None:
 
 
 def _fallback_cover(markdown: str, snapshot: dict) -> dict:
-    from valuation.research_dossier.schema import _chapter
+    from valuation.research_dossier.schema import _as_point, _chapter
 
-    def paras(title: str) -> list[str]:
+    def points(title: str) -> list[dict[str, str]]:
         rows = []
         for raw in re.split(r"\n+", _chapter(markdown, title)):
             line = raw.strip()
             if not line or line.startswith("|") or line.startswith("#") or line.startswith(">"):
                 continue
-            line = re.sub(r"^\d+\.\s*", "", line)
-            line = line.strip("* ")
-            if line:
-                rows.append(line)
+            point = _as_point(line)
+            if point and (point["title"] or point["text"]):
+                rows.append(point)
         return rows
 
-    outlook_paras = paras("业务展望")
-    logic_paras = paras("投资逻辑")
-    point_paras = paras("投资要点")
-    pnl_paras = paras("盈利预测")
-    val_paras = paras("估值与评级")
-    risk_paras = paras("主要风险")
-    background = " ".join((outlook_paras[:1] or point_paras[:1])[:1])
-    thesis_bits = [p for p in logic_paras if "分歧" in p or "主线" in p][:2]
-    if not thesis_bits:
-        thesis_bits = logic_paras[:1]
-    thesis_bits += [p for p in val_paras if "目标价" in p][:1]
-    outlook = " ".join(outlook_paras[:2] or outlook_paras[:1] + [p for p in pnl_paras if "拐点" in p or "毛利率" in p][:1])
+    logic = points("投资逻辑")
+    outlook = points("业务展望") or points("盈利预测")
+    risks = points("主要风险")
+    thesis = [item for item in logic if any(word in item["text"] for word in ("分歧", "主线", "收入", "目标价"))]
+    if not thesis:
+        thesis = logic
+    if not any("目标价" in item["text"] or "目标PE" in item["text"] for item in thesis):
+        thesis.extend(item for item in points("估值与评级") if "目标价" in item["text"])
     return {
-        "background": background.strip(),
-        "thesis": " ".join(thesis_bits).strip(),
-        "outlook": outlook.strip(),
-        "risks": risk_paras[:3],
+        "thesis": thesis,
+        "outlook": outlook,
+        "risks": risks,
         "sources": [],
     }
 

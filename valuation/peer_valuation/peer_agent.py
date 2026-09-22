@@ -40,7 +40,7 @@ class PeerPick(BaseModel):
 
 
 class NominateDraft(BaseModel):
-    candidates: list[PeerPick] = Field(description="8 到 12 个候选，不要本公司")
+    candidates: list[PeerPick] = Field(description="8 到 12 个候选")
 
 
 class CorePick(BaseModel):
@@ -51,7 +51,7 @@ class CorePick(BaseModel):
 class ClassifyDraft(BaseModel):
     core: list[CorePick] = Field(description="至少 4 家，只能选自有 pe_y1 的行")
     pe_adjust: float = Field(1.0, description="默认 1。偏离必须在 rationale 写量化理由")
-    rationale: str = Field(description="为何纳入或排除：业务和财务属性优先，不要只因为 PE 高低")
+    rationale: str = Field(description="为何纳入或排除：业务和财务属性优先")
     open_gaps: list[str] = Field(default_factory=list)
 
 
@@ -104,11 +104,11 @@ class ClassifyDeps:
 def _nominate_instructions(ctx: RunContext[NominateDeps]) -> str:
     deps = ctx.deps
     return (
-        f"你在为{deps.label}找可比公司。不要提名{deps.ticker}自己。\n"
+        f"你在为{deps.label}找可比公司。提名同业。\n"
         f"还可选股 {deps.screens_left} 次、检索 {deps.searches_left} 次。材料够了就停。\n"
-        "优先业务相近、卖方覆盖会够的名字；港美股可以，不要只堆海外代码。\n"
-        "screen_peers 的 concept 只能是短词，例如 服务器、电子制造，不要写句子。\n"
-        "交出 8 到 12 个候选：公司名、代码、为何可比。不要填 PE。"
+        "优先业务相近、卖方覆盖会够的 A 股；港美股可以作补充。\n"
+        "screen_peers 的 concept 用短词，例如 服务器、电子制造。\n"
+        "交出 8 到 12 个候选：公司名、代码、为何可比。PE 由代码填。"
     )
 
 
@@ -125,7 +125,7 @@ def screen_peers(ctx: RunContext[NominateDeps], concept: str) -> str:
     """按概念补一批候选代码。只能用一次。"""
     deps = ctx.deps
     if _bad_concept(concept):
-        return "概念必须是短词，例如 服务器、电子制造。不要写句子。这次不计数。"
+        return "概念用短词，例如 服务器、电子制造。这次不计数。"
     if deps.screens_left <= 0:
         return "选股次数已用完。"
     deps.screen_seq += 1
@@ -169,10 +169,9 @@ def _classify_instructions(ctx: RunContext[ClassifyDeps]) -> str:
     return (
         f"你在为{deps.label}选核心同业池。预测首年是{deps.y1}。\n"
         "只能读已填好的表。有 pe_y1 的才能进核心池，至少 4 家。\n"
-        "先按业务和财务属性选。thin 或没有 pe_y1 的不能进核心。\n"
-        "不要仅因 PE 高低剔除。高倍数若业务可比必须留在核心池，可在 note 或 rationale 写离散度，必要时用 pe_adjust。\n"
-        "小样本可以保留，覆盖不足写进 open_gaps，不要为凑满 4 家拉不可比公司。\n"
-        "不要改 PE 数字。pe_adjust 默认 1。要偏离必须写出量化理由。本公司不要进池。"
+        "先按业务再看财务。高倍数若业务可比可留在核心池，离散度写进 note 或 rationale，必要时用 pe_adjust。\n"
+        "小样本可以保留。覆盖不够写缺口，核心池只放业务可比的名字。\n"
+        "pe_adjust 默认 1。要偏离须写出量化理由。"
     )
 
 
@@ -263,8 +262,8 @@ def _run_nominate_more(facts: dict, filled: list[dict[str, Any]], chat) -> Nomin
     )
     prompt = (
         f"本公司 {deps.label}。已填表：{have}。\n"
-        "有预测首年 PE 的还不到 4 家。再提名 6 到 8 个 A 股，代码不要重复。\n"
-        "优先服务器、ODM、电子制造，卖方覆盖要够。不要本公司，不要填 PE。"
+        "有预测首年 PE 的还不到 4 家。再提名 6 到 8 个尚未出现的 A 股同业。\n"
+        "优先服务器、ODM、电子制造，卖方覆盖要够。"
     )
     _log(deps, "[peer] 补提名 A 股")
     result = nominate_agent.run_sync(prompt, deps=deps, model=chat)
@@ -329,7 +328,7 @@ def _run_classify(facts: dict, filled: list[dict[str, Any]], chat) -> dict:
 def _nominate_user(deps: NominateDeps) -> str:
     segs = "、".join(_brief_segment_hint(deps))
     text = (
-        f"本公司 {deps.label}。不要提名 {deps.ticker}。\n"
+        f"本公司 {deps.label}。提名同业。\n"
         f"已有分部：{segs or '未知'}。\n"
         "用 screen_peers 或 search_research 补名单也可以，够了就写 candidates。\n"
     )
@@ -345,7 +344,7 @@ def _classify_user(deps: ClassifyDeps, hint: str) -> str:
         f"{json.dumps(usable, ensure_ascii=False)}\n"
         "其余候选：\n"
         f"{json.dumps([item for item in deps.filled if item.get('pe_y1') is None], ensure_ascii=False)}\n"
-        "不要改 pe_y1。核心至少 4 家。不进核心须写业务或财务理由，不能只写 PE 离群。\n"
+        "核心至少 4 家。先按业务再看财务；不进核心须写业务或财务理由。覆盖不够写缺口。\n"
     )
     if hint:
         text += hint

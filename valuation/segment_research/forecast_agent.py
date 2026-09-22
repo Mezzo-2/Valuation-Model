@@ -23,21 +23,21 @@ from valuation.shared.io import dump_json, load_json, spec_dir
 class ForecastDraft(BaseModel):
     method: str = Field(
         default="",
-        description="预测方法白名单之一。残差不要自己选，代码会指定收入增速法",
+        description="预测方法白名单之一。残差由代码指定为收入增速法",
     )
     why_method: str = Field(
         default="",
-        description="为何用这个方法。量价要写清哪侧有搜证、哪侧用锁定收入回推",
+        description="为何用这个方法。量价写清哪侧有搜证、哪侧用锁定收入回推",
     )
     historical_data: dict[str, dict[str, float]] = Field(
         default_factory=dict,
-        description="外层是方法字段，内层是年份。收入增速法如 {\"分部收入\": {\"2023A\": 3311}}。分部收入不要改",
+        description="外层是方法字段，内层是年份。收入增速法如 {\"分部收入\": {\"2023A\": 3311}}",
     )
     final_forecast: dict[str, dict[str, float]] = Field(
-        description="外层是方法字段，内层是年份。收入增速法如 {\"收入增速\": {\"2026E\": 0.18}}，用小数不要用百分数。不要求等于任何一家卖方"
+        description="外层是方法字段，内层是年份。收入增速法如 {\"收入增速\": {\"2026E\": 0.18}}，用小数"
     )
     final_rationale: str = Field(
-        description="严格按理由模板三段写。我们的数从事件发酵推，不抄卖方。没写进本分部该指标假设的材料不要出现。"
+        description="按理由模板三段写：事件发酵、卖方假设、我们的数"
     )
     open_gaps: list[str] = Field(default_factory=list)
     sources: list[dict[str, str]] = Field(default_factory=list)
@@ -83,8 +83,7 @@ def _rationale_template(years: list[str]) -> str:
     )
     ours = "\n".join(
         (
-            f"{year}：{{数字}}。{{量/价/结构怎么走到这个数}}。"
-            "不要写「由上面的事件发酵推出来」，不要写跟了谁、也不要抄谁的数字。"
+            f"{year}：{{数字}}。{{量、价或结构各自怎么变，怎么走到这个数}}。"
             if i == 0
             else f"{year}：…"
         )
@@ -95,12 +94,12 @@ def _rationale_template(years: list[str]) -> str:
         f"{ev}\n"
         "【卖方假设】\n"
         f"{street}\n"
-        "没有材料的年份只写「年份：」，后面留空，不要写「没有」。\n"
+        "没有材料的年份只写「年份：」，后面留空。\n"
         "【我们的数】\n"
         f"{ours}\n"
-        "没有事件可推的年份，写回落或外推。\n"
-        "不要写：公司总量、兄弟分部、笔记里另一套历史收入、以及「因此不用某某」。"
-        "没写进本分部该指标假设的材料，默认无贡献，理由里不要出现。"
+        "卖方假设只作对照。我们的数写本分部该年的量、价或结构路径。"
+        "没有事件可推的年份，写回落或外推。"
+        "材料只写会进本分部该指标的事实。"
     )
 
 
@@ -111,35 +110,32 @@ def _field_map() -> str:
         fcst = "、".join(FORECAST_FIELDS.get(method, ()))
         lines.append(f"{method}：historical_data 写 {hist}；final_forecast 写 {fcst}。")
     return (
-        "字段名必须恰好是这些汉字，不要写 销量_GWh、单价_元每Wh 这种后缀。"
+        "字段名用销量、单价这些汉字。"
         + "".join(lines)
-        +         "量价对账：每年 销量×单价/unit_meta.fx = 锁定分部收入。"
-        "有搜证的一侧留下，另一侧用收入回推到对得上，不要四舍五入到对不齐。"
-        "量价、用户单价、门店坪效必须自报 unit_meta.fx，和单位对得上，不要缺省。"
-        "渗透、订单没有 fx。量价增速法的预测年只写销量增速、单价增速，用小数。"
+        + "量价对账：每年 销量×单价/unit_meta.fx = 锁定分部收入。"
+        "有搜证的一侧留下，另一侧用收入回推到对得上。"
+        "量价、用户单价、门店坪效须自报 unit_meta.fx。"
+        "渗透、订单没有 fx。量价增速法的预测年写销量增速、单价增速，用小数。"
     )
 
 
 def _driver_hint(method: str, hist_need: str) -> str:
     if method in QTY_METHODS:
         return (
-            "历史销量×单价/fx 必须对上已锁定的分部收入。"
+            "历史销量×单价/fx 对上已锁定的分部收入。"
             "先用笔记里已实现的量或价；缺的一侧用锁定收入回推。"
-            "unit_meta.fx 必须自报，不要缺省。"
-            "两侧都没有，缺口里写清楚，不要假装有搜证；仍须交出能对账的数。"
+            "unit_meta.fx 自报。两侧都没有，缺口写进 open_gaps，仍须交出能对账的数。"
         )
     if method in FX_METHODS:
         return (
             f"历史驱动（{hist_need}）从笔记的已实现里拆。"
-            "有的就用，缺的用锁定收入回推。"
-            "unit_meta.fx 必须自报，和单位对得上，不要缺省。"
-            "笔记没有的，缺口里写清楚。"
+            "有的就用，缺的用锁定收入回推。unit_meta.fx 自报。"
+            "笔记没有的，缺口写进 open_gaps。"
         )
     if method != "收入增速法":
         return (
             f"历史驱动（{hist_need}）从笔记的已实现里拆。"
-            "有的就用，缺的用锁定收入回推。不要写 unit_meta.fx。"
-            "笔记没有的，缺口里写清楚。"
+            "有的就用，缺的用锁定收入回推。笔记没有的，缺口写进 open_gaps。"
         )
     return ""
 
@@ -152,7 +148,7 @@ def _forecast_instructions(ctx: RunContext[ForecastDeps]) -> str:
         fcst_need = "、".join(FORECAST_FIELDS.get(deps.method, ()))
         extra = _driver_hint(deps.method, hist_need)
         pick = (
-            f"预测方法已由代码指定为{deps.method}，不要改。"
+            f"预测方法已指定为{deps.method}。"
             f"历史驱动要写：{hist_need}。未来要写：{fcst_need}。{extra}"
         )
     else:
@@ -162,11 +158,9 @@ def _forecast_instructions(ctx: RunContext[ForecastDeps]) -> str:
             f"{_field_map()}"
         )
     return (
-        f"你是{deps.label}的分析师。笔记是材料，不是答案。\n"
+        f"你是{deps.label}的分析师。笔记是材料，用锁定分部收入对账。\n"
         f"{pick}\n"
-        "分部收入已经锁定，直接用，不要改，也不要和笔记里另一套分部收入对账。"
-        "不要把 E 年写进 historical_data。\n"
-        "final_rationale 按下面模板写。我们的数从事件发酵推，不从卖方数字抄。禁止合成中位当答案。\n"
+        "historical_data 只写历史年。final_rationale 按模板写；卖方假设只作对照，我们的数写量、价或结构路径。\n"
         f"{_rationale_template(deps.forecast_periods)}"
     )
 
@@ -281,16 +275,14 @@ def _forecast_user(deps: ForecastDeps, hint: str) -> str:
     else:
         method_line = (
             "先写 method 和 why_method，再按该方法填 historical_data / final_forecast。"
-            "不要读拆分卡上的方法，拆分步没有锁定方法。"
             f"{_field_map()}"
         )
     text = (
-        "不要再检索。final_rationale 按下面模板写。\n"
+        "检索已结束。final_rationale 按下面模板写。\n"
         f"{_rationale_template(deps.forecast_periods)}\n"
         f"{method_line}\n"
         f"历史年：{hist}  预测年：{fcst}\n"
         f"已锁定分部收入：{json.dumps(rev, ensure_ascii=False)}\n"
-        "不要改成年份包字段。\n"
         f"{format_brief_for_forecast(deps.brief)}\n"
     )
     if hint:
@@ -305,17 +297,16 @@ def _retry_hint(deps: ForecastDeps, draft: ForecastDraft, errors: list[str]) -> 
     extra = ""
     if method in QTY_METHODS:
         extra = (
-            "字段名必须是销量、单价，不要加单位后缀。"
-            "每年销量×单价/unit_meta.fx 必须等于锁定分部收入；"
-            "有搜证的一侧留下，另一侧用收入回推到对得上。"
-            "unit_meta.fx 必须自报。"
+            "字段名是销量、单价。"
+            "每年销量×单价/unit_meta.fx 等于锁定分部收入；"
+            "有搜证的一侧留下，另一侧用收入回推。unit_meta.fx 自报。"
         )
         if method == "量价增速法":
-            extra += "final_forecast 只写销量增速、单价增速，用小数。"
+            extra += "final_forecast 写销量增速、单价增速，用小数。"
     elif method in FX_METHODS:
-        extra = "unit_meta.fx 必须自报，和单位对得上，不要缺省。"
+        extra = "unit_meta.fx 自报，和单位对得上。"
     elif method not in {"", "收入增速法"}:
-        extra = "驱动测算必须对上锁定分部收入。不要写 unit_meta.fx。"
+        extra = "驱动测算对上锁定分部收入。"
     return (
         f"不合法：{'；'.join(errors)}。"
         f"你选了{method}。historical_data 外层只能写 {hist_need}。"

@@ -163,7 +163,7 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
         fails.append(str(exc))
 
     val = wb["估值预测"]
-    for label in ("目标PE", "目标价", "上行空间", "投资评级"):
+    for label in ("目标PE", "中枢目标价", "较现价空间", "投资评级"):
         try:
             r = find_row_by_label(val, label)
             cell = val.cell(row=r, column=2).value
@@ -175,8 +175,9 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
     sm = wb["总结"]
     formula_labels = (
         "目标PE",
-        "目标价",
-        "上行空间",
+        "合理价值区间",
+        "中枢目标价",
+        "较现价空间",
         "投资评级",
         "当前股价",
         "EPS_最近实际",
@@ -203,7 +204,7 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
         except ValueError as exc:
             fails.append(str(exc))
 
-    narrative = ("公司背景", "投研逻辑", "未来展望", "主要风险")
+    narrative = ("投研逻辑", "未来展望", "主要风险")
     for title in narrative:
         try:
             find_row_by_label(sm, title)

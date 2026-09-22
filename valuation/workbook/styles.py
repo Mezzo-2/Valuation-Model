@@ -113,7 +113,7 @@ def apply_number_formats(ws: Worksheet, ratio_rows: set[int], last_col: int, not
                 continue
             if cell.number_format == "yyyy-mm-dd":
                 continue
-            if row in ratio_rows or any(k in label for k in ("率", "增速", "占比", "空间")):
+            if row in ratio_rows or any(k in label for k in ("率", "增速", "同比", "占比", "空间", "涨跌")):
                 if "PE" in label or "股本" in label:
                     cell.number_format = NUM_FMT
                 else:

@@ -56,7 +56,7 @@ def build_attribution(spec: dict, run_dir: Path | None = None) -> dict[str, Any]
         "as_of": facts.get("as_of") or facts.get("as_of_date") or "",
         "stale_days": STALE_DAYS,
         "rows": rows,
-        "instruction": "先写时效和口径，再写经营观点。不要直接写成我们更谨慎。",
+        "instruction": "先写时效和口径，再写经营观点。",
     }
 
 

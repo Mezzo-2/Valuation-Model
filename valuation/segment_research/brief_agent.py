@@ -52,7 +52,7 @@ ContentType = Literal["domestic_report", "foreign_report", "minutes", "comment"]
 
 
 class FactRow(BaseModel):
-    """已经发生的事。卖方 E 年预测不要写在这里。"""
+    """已经发生的事。只放已实现期。"""
 
     period: str = Field("", description="已实现期，如 2023A、1H26")
     metric: str = Field("", description="收入、出货、单价、占比等")
@@ -89,7 +89,7 @@ class TimelineEvent(BaseModel):
 
 
 class ResearchBrief(BaseModel):
-    """研究笔记。已实现、各家预测、事件分开写。不写我们的增速。"""
+    """研究笔记。已实现、各家预测、事件分开写。只整理材料，增速留给下一步。"""
 
     facts: list[FactRow] = Field(default_factory=list)
     sellside: list[SellsideCall] = Field(default_factory=list)
@@ -130,15 +130,15 @@ def _brief_instructions(ctx: RunContext[BriefDeps]) -> str:
     rev = "；".join(f"{year}={amount}" for year, amount in deps.notes_revenue.items()) or "无"
     others = "、".join(deps.sibling_names) or "无"
     return (
-        f"你在为{deps.label}做分部研究。你不拍我们的增速，也不选预测方法。\n"
+        f"你在为{deps.label}做分部研究。只整理材料，增速留给下一步。\n"
         "用 search_research 为本分部找已实现和卖方的收入、出货、销量、ASP、单价、渗透、市占等。"
         "可以问盈利预测表里的分部出货和单价。"
         "还要找点名机构的预测、会改量价或增速的事件。\n"
         f"还可检索 {deps.searches_left} 次。材料够了就停搜，整理成笔记。\n"
-        f"已锁定历史分部收入（亿元，请写进已实现，不要改数字）：{rev}。\n"
+        f"已锁定历史分部收入（亿元，请写进已实现）：{rev}。\n"
         f"公司还有这些分部，写到它们时说清不是「{deps.segment}」：{others}。\n"
-        "笔记三块：facts 只放已实现；sellside 是别人的预测，尽量点名机构和日期，不要合成中位；"
-        "event_timeline 写事件，不要按研报发表日堆。"
+        "笔记三块：facts 只放已实现；sellside 是别人的预测，尽量点名机构和日期；"
+        "event_timeline 按事件发生日写，不按研报发表日堆。"
     )
 
 
@@ -243,7 +243,7 @@ def _brief_user(deps: BriefDeps) -> str:
         f"历史年：{hist}  预测年：{fcst}\n"
         f"已锁定分部收入（亿元）：{rev}\n"
         "用 search_research 检索，材料够了就写出 facts / sellside / event_timeline / gaps。\n"
-        "不要写出我们的预测增速。\n"
+        "只整理材料，增速留给下一步。\n"
     )
     if deps.seed_hits:
         text += "上次已读材料，可直接用，也可再搜：\n"

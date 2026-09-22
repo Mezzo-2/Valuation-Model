@@ -190,7 +190,7 @@ def _split(wb: Workbook, spec: dict) -> None:
     split = spec["split"]
     hist = facts["hist_periods"]
     ws = wb["主营业务拆分"]
-    headers = ["分部名称", *hist, "unit", "备注"]
+    headers = ["分部名称", *hist, "单位", "备注"]
     last = len(headers)
     cells = [ws.cell(row=2, column=i, value=h) for i, h in enumerate(headers, 1)]
     apply_structure_style(ws, cells, "section")
@@ -260,7 +260,7 @@ def _revenue(wb: Workbook, spec: dict) -> None:
     periods = hist + fcst
     ws = wb["收入预测"]
     last = 2 + len(periods) + 1  # unit + 备注 → periods start at 2, unit = 2+len, 备注 = last
-    write_first_section_header(ws, [*periods, "unit", "备注"])
+    write_first_section_header(ws, [*periods, "单位", "备注"])
     unit_col = last - 1
     note_col = last
     row = 3
@@ -305,7 +305,7 @@ def _revenue(wb: Workbook, spec: dict) -> None:
 
     write_section_row(ws, row, ["收入构建区"], last)
     row += 1
-    top_rev_rows: list[int] = []
+    top_lines: list[tuple[str, int]] = []
     for group in groups:
         if group.drilled:
             write_group_row(ws, row, group.parent, last)
@@ -324,39 +324,41 @@ def _revenue(wb: Workbook, spec: dict) -> None:
                     for child in group.children
                 )
                 ws.cell(row=parent_rev_row, column=_pcol(periods, year), value=f"={parts}")
-            top_rev_rows.append(parent_rev_row)
+            top_lines.append((group.parent, parent_rev_row))
         elif group.leaf:
             row = _write_revenue_build(
                 ws, row, group.leaf, forecasts, hist, fcst, periods, last, unit_col
             )
-            top_rev_rows.append(group.leaf["_rows"]["分部收入"])
+            top_lines.append((group.leaf["name"], group.leaf["_rows"]["分部收入"]))
     if company_res:
         row = _write_revenue_build(
             ws, row, company_res, forecasts, hist, fcst, periods, last, unit_col
         )
-        top_rev_rows.append(company_res["_rows"]["分部收入"])
+        top_lines.append((company_res["name"], company_res["_rows"]["分部收入"]))
 
     write_section_row(ws, row, ["收入归因"], last)
     row += 1
     ws.cell(row=row, column=1, value="营业收入")
+    total_row = row
     for year in periods:
-        parts = "+".join(cell_ref_at(ws, rev_row, year) for rev_row in top_rev_rows)
+        parts = "+".join(cell_ref_at(ws, rev_row, year) for _, rev_row in top_lines)
         ws.cell(row=row, column=_pcol(periods, year), value=f"={parts}")
     row += 1
-    ws.cell(row=row, column=1, value="收入对账")
-    for year in hist:
-        model = cell_ref(ws, "营业收入", year, same_sheet=True)
-        reported = cell_ref(wb["历史财务数据"], "营业收入", year, same_sheet=False)
-        ws.cell(row=row, column=_pcol(periods, year), value=f"={model}-{reported}")
-    ws.row_dimensions[row].hidden = True
+    for name, rev_row in top_lines:
+        ws.cell(row=row, column=1, value=f"{name}收入占比")
+        for year in periods:
+            seg = cell_ref_at(ws, rev_row, year)
+            total = cell_ref_at(ws, total_row, year)
+            ws.cell(row=row, column=_pcol(periods, year), value=f"={seg}/{total}")
+        row += 1
 
     write_sheet_title(ws, facts["company"], last)
-    set_col_widths(ws, last, first=22, other=12)
+    set_col_widths(ws, last, first=28, other=12)
     ws.column_dimensions[get_column_letter(note_col)].width = 42
     ratio = set()
     for r in range(3, ws.max_row + 1):
         lab = str(ws.cell(row=r, column=1).value or "")
-        if "增速" in lab or "占比" in lab or lab.split("_", 1)[0] in RATE_FIELDS:
+        if any(token in lab for token in ("增速", "占比", "同比")) or lab.split("_", 1)[0] in RATE_FIELDS:
             ratio.add(r)
     apply_number_formats(ws, ratio, last, note_col)
 
@@ -381,6 +383,7 @@ def _write_revenue_build(ws, row, seg, forecasts, hist, fcst, periods, last, uni
         grow_rev = rows["收入增速"]
         for i, year in enumerate(hist):
             if i == 0:
+                _write_dash(ws, grow_rev, _pcol(periods, year))
                 continue
             prev = hist[i - 1]
             cur = cell_ref_at(ws, rev_row, year)
@@ -434,6 +437,7 @@ def _write_revenue_build(ws, row, seg, forecasts, hist, fcst, periods, last, uni
                 assume_row = rows[grow]
                 for i, year in enumerate(hist):
                     if i == 0:
+                        _write_dash(ws, assume_row, _pcol(periods, year))
                         continue
                     cur = cell_ref_at(ws, rows[f"构建_{field}"], year)
                     pri = cell_ref_at(ws, rows[f"构建_{field}"], hist[i - 1])
@@ -466,6 +470,7 @@ def _write_revenue_build(ws, row, seg, forecasts, hist, fcst, periods, last, uni
     rows["分部收入增速"] = row
     for i, year in enumerate(periods):
         if i == 0:
+            _write_dash(ws, row, _pcol(periods, year))
             continue
         cur = cell_ref_at(ws, rows["分部收入"], year)
         pri = cell_ref_at(ws, rows["分部收入"], periods[i - 1])
@@ -630,9 +635,11 @@ def _pnl(wb: Workbook, spec: dict) -> None:
     ws = wb["利润表预测"]
     last = 2 + len(periods)
     write_first_section_header(ws, [*periods, "备注"])
-    labels_hist_link = [
+    labels = [
         "营业收入",
+        "营业收入同比",
         "营业成本",
+        "合并毛利率",
         "毛利",
         "销售费用",
         "管理费用",
@@ -645,23 +652,44 @@ def _pnl(wb: Workbook, spec: dict) -> None:
         "所得税费用",
         "少数股东损益",
         "归母净利润",
+        "归母净利润同比",
         "EPS",
     ]
+    derived = {"营业收入同比", "合并毛利率", "归母净利润同比"}
     row = 3
-    for label in labels_hist_link:
+    for label in labels:
         ws.cell(row=row, column=1, value=label)
-        for year in hist:
-            src = fs_label(label) if label == "EPS" else label
-            ws.cell(
-                row=row,
-                column=_pcol(periods, year),
-                value=f"={cell_ref(wb['历史财务数据'], src, year)}",
-            )
+        if label not in derived:
+            for year in hist:
+                src = fs_label(label) if label == "EPS" else label
+                ws.cell(
+                    row=row,
+                    column=_pcol(periods, year),
+                    value=f"={cell_ref(wb['历史财务数据'], src, year)}",
+                )
         row += 1
 
-    # forecast formulas on the same rows — find by label
     def col(year: str) -> int:
         return _pcol(periods, year)
+
+    for year in periods:
+        ws.cell(
+            row=_row(ws, "合并毛利率"),
+            column=col(year),
+            value=f"={cell_ref(wb['运营成本预测'], '合并毛利率', year)}",
+        )
+    for label, source in (
+        ("营业收入同比", "营业收入"),
+        ("归母净利润同比", "归母净利润"),
+    ):
+        r = _row(ws, label)
+        for i, year in enumerate(periods):
+            if i == 0:
+                _write_dash(ws, r, col(year))
+                continue
+            cur = cell_ref(ws, source, year, same_sheet=True)
+            pri = cell_ref(ws, source, periods[i - 1], same_sheet=True)
+            ws.cell(row=r, column=col(year), value=f"={cur}/{pri}-1")
 
     for year in fcst:
         ws.cell(row=_row(ws, "营业收入"), column=col(year), value=f"={cell_ref(wb['收入预测'], '营业收入', year)}")
@@ -709,7 +737,12 @@ def _pnl(wb: Workbook, spec: dict) -> None:
     )
     write_sheet_title(ws, facts["company"], last)
     set_col_widths(ws, last, first=22)
-    apply_number_formats(ws, set(), last, last)
+    apply_number_formats(
+        ws,
+        {_row(ws, "营业收入同比"), _row(ws, "合并毛利率"), _row(ws, "归母净利润同比")},
+        last,
+        last,
+    )
 
 
 def _valuation(wb: Workbook, spec: dict) -> None:
@@ -718,7 +751,8 @@ def _valuation(wb: Workbook, spec: dict) -> None:
     comps = spec["comps"]
     fcst = facts["forecast_periods"]
     ws = wb["估值预测"]
-    last = 5  # A-E
+    last = 6
+    note_col = last
     write_first_section_header(ws, ["发布日期", *[f"{y}总营收" for y in fcst]])
     row = 3
     for inst in cons["institutions"]:
@@ -742,7 +776,7 @@ def _valuation(wb: Workbook, spec: dict) -> None:
     row += 2
 
     y1 = fcst[0]
-    write_section_row(ws, row, ["核心同业池", f"{y1} PE", "PE_TTM", "总市值(亿·本币)", "备注"], last)
+    write_section_row(ws, row, ["核心同业池", f"{y1} PE", "PE_TTM", "总市值", "单位", "备注"], last)
     row += 1
     core_start = row
     for name in comps["core"]:
@@ -750,74 +784,82 @@ def _valuation(wb: Workbook, spec: dict) -> None:
         ws.cell(row=row, column=2, value=name["pe_y1"])
         ws.cell(row=row, column=3, value=name["pe_ttm"])
         ws.cell(row=row, column=4, value=name["mcap"])
-        currency = str(name.get("currency") or "").strip()
-        note = name.get("note") or ""
-        if currency:
-            note = f"{currency}。{note}" if note else currency
-        write_note(ws, row, 5, note)
+        ws.cell(row=row, column=5, value=_mcap_unit(name.get("currency")))
+        write_note(ws, row, note_col, name.get("note") or "")
         row += 1
     core_end = row - 1
-    write_section_row(ws, row, ["同业 PE 统计"], last)
-    row += 1
-    ws.cell(row=row, column=1, value="核心池PE均值")
+    ws.cell(row=row, column=1, value="核心池均值")
     ws.cell(row=row, column=2, value=f"=AVERAGE(B{core_start}:B{core_end})")
+    ws.cell(row=row, column=3, value=f"=AVERAGE(C{core_start}:C{core_end})")
     row += 1
-    write_section_row(ws, row, ["目标价推导"], last)
+    ws.cell(row=row, column=1, value="核心池中位数")
+    ws.cell(row=row, column=2, value=f"=MEDIAN(B{core_start}:B{core_end})")
     row += 1
-    ws.cell(row=row, column=1, value="目标PE调整系数")
-    ws.cell(row=row, column=2, value=comps["pe_adjust"])
-    write_note(ws, row, 5, comps["rationale"])
+    mean_pe = f"B{_row(ws, '核心池均值')}"
+    eps = cell_ref(wb["利润表预测"], "EPS", y1)
+    price = "历史财务数据!B" + str(_row(wb["历史财务数据"], fs_label("当前股价")))
+    write_section_row(ws, row, ["综合估值预测", "PE调整系数", "目标PE", "目标价", "较现价空间"], last)
     row += 1
+    neutral = row + 1
+    scenario_rows = []
+    for label, coef in (
+        ("悲观", f"=B{neutral}*0.85"),
+        ("中性", comps["pe_adjust"]),
+        ("乐观", f"=B{neutral}*1.15"),
+    ):
+        scenario_rows.append(row)
+        ws.cell(row=row, column=1, value=label)
+        ws.cell(row=row, column=2, value=coef)
+        ws.cell(row=row, column=3, value=f"=B{row}*{mean_pe}")
+        ws.cell(row=row, column=4, value=f"=C{row}*{eps}")
+        ws.cell(row=row, column=5, value=f"=D{row}/{price}-1")
+        row += 1
     ws.cell(row=row, column=1, value="目标PE")
-    pe_row = row
+    ws.cell(row=row, column=2, value=f"=C{neutral}")
+    row += 1
+    ws.cell(row=row, column=1, value="合理价值区间")
+    bear, _neutral_row, bull = scenario_rows
     ws.cell(
-        row=pe_row,
+        row=row,
         column=2,
-        value=f"=B{_row(ws, '核心池PE均值')}*B{_row(ws, '目标PE调整系数')}",
+        value=f'=TEXT(D{bear},"{NUM_FMT}")&" - "&TEXT(D{bull},"{NUM_FMT}")',
     )
     row += 1
-    ws.cell(row=row, column=1, value="目标价")
-    eps = cell_ref(wb["利润表预测"], "EPS", y1)
-    ws.cell(row=row, column=2, value=f"=B{pe_row}*{eps}")
+    ws.cell(row=row, column=1, value="中枢目标价")
+    ws.cell(row=row, column=2, value=f"=D{neutral}")
     row += 1
-    ws.cell(row=row, column=1, value="上行空间")
-    price = "历史财务数据!B" + str(_row(wb["历史财务数据"], fs_label("当前股价")))
-    ws.cell(row=row, column=2, value=f"=B{row-1}/{price}-1")
+    ws.cell(row=row, column=1, value="较现价空间")
+    space_row = row
+    ws.cell(row=row, column=2, value=f"=E{neutral}")
     row += 1
     ws.cell(row=row, column=1, value="投资评级")
-    ws.cell(row=row, column=2, value=f'=IF(B{row-1}>=0.15,"买入","观察")')
-    row += 2
-    write_section_row(ws, row, ["目标价口径与反向"], last)
-    row += 1
-    ws.cell(row=row, column=1, value="目标价期限")
-    ws.cell(row=row, column=2, value="当前合理价格")
-    write_note(
-        ws,
-        row,
-        5,
-        f"对应预测首年 {y1} EPS × 目标 PE，不是未来某时点价格。后两年盈利只解释倍数，不进主公式。",
-    )
-    row += 1
-    ws.cell(row=row, column=1, value="现价隐含EPS")
-    ws.cell(row=row, column=2, value=f"={price}/B{pe_row}")
-    write_note(ws, row, 5, "现价 ÷ 目标PE，用来对照本模型预测首年 EPS。")
-    row += 1
-    ws.cell(row=row, column=1, value="报告归母净利润")
-    last_a = facts["hist_periods"][-1]
-    ws.cell(row=row, column=2, value=f"={cell_ref(wb['历史财务数据'], '归母净利润', last_a)}")
-    write_note(ws, row, 5, _normalized_earnings_note(facts))
+    ws.cell(row=row, column=2, value=f'=IF(B{space_row}>=0.15,"买入","观察")')
 
     _ = median_row
     write_sheet_title(ws, facts["company"], last)
     set_col_widths(ws, last, first=22, other=14)
-    ws.column_dimensions["E"].width = 36
-    apply_number_formats(ws, {_row(ws, "上行空间")}, last, None)
-    ws.cell(row=_row(ws, "目标PE"), column=2).number_format = NUM_FMT
-    ws.cell(row=_row(ws, "目标价"), column=2).number_format = NUM_FMT
+    ws.column_dimensions["B"].width = 20
+    ws.column_dimensions["E"].width = 14
+    ws.column_dimensions["F"].width = 36
+    apply_number_formats(ws, {_row(ws, "较现价空间")}, last, None)
+    for label in ("目标PE", "中枢目标价"):
+        ws.cell(row=_row(ws, label), column=2).number_format = NUM_FMT
+    range_cell = ws.cell(row=_row(ws, "合理价值区间"), column=2)
+    range_cell.number_format = "@"
+    range_cell.alignment = Alignment(horizontal="right")
+    for scenario in scenario_rows:
+        ws.cell(row=scenario, column=3).number_format = NUM_FMT
+        ws.cell(row=scenario, column=4).number_format = NUM_FMT
+        ws.cell(row=scenario, column=5).number_format = PCT_FMT
+
+
+def _mcap_unit(currency: object) -> str:
+    code = str(currency or "CNY").strip().upper() or "CNY"
+    return {"CNY": "亿元", "HKD": "亿港元", "USD": "亿美元"}.get(code, code)
 
 
 def _summary(wb: Workbook, spec: dict) -> None:
-    from valuation.research_dossier.schema import DISCLAIMER, format_risks
+    from valuation.research_dossier.schema import DISCLAIMER, point_text, point_title
 
     facts = spec["facts"]
     notes = spec["summary_notes"]
@@ -836,9 +878,12 @@ def _summary(wb: Workbook, spec: dict) -> None:
     row = _write_company_cover(ws, row, spec.get("company_info") or {}, last, fs)
     write_section_row(ws, row, ["核心结论"], last)
     row += 1
-    for label in ("目标PE", "目标价", "上行空间", "投资评级"):
+    for label in ("目标PE", "合理价值区间", "中枢目标价", "较现价空间", "投资评级"):
         ws.cell(row=row, column=1, value=label)
-        ws.cell(row=row, column=2, value=f"=估值预测!B{_row(val, label)}")
+        src = _row(val, label)
+        cell = ws.cell(row=row, column=2, value=f"=估值预测!B{src}")
+        if label == "合理价值区间":
+            cell.alignment = Alignment(horizontal="right")
         row += 1
     write_section_row(ws, row, ["关键指标"], last)
     row += 1
@@ -884,19 +929,21 @@ def _summary(wb: Workbook, spec: dict) -> None:
         for i, year in enumerate(periods_show):
             ws.cell(row=row, column=2 + i, value=f"={cell_ref(cost, label, year)}")
         row += 1
-    for title, text in (
-        ("公司背景", notes["background"]),
-        ("投研逻辑", notes["thesis"]),
-        ("未来展望", notes["outlook"]),
-        ("主要风险", format_risks(notes)),
+    for title, key in (
+        ("投研逻辑", "thesis"),
+        ("未来展望", "outlook"),
+        ("主要风险", "risks"),
     ):
         write_section_row(ws, row, [title], last)
         row += 1
-        write_note(ws, row, 2, text)
-        ws.cell(row=row, column=2).alignment = Alignment(wrap_text=True, vertical="top")
-        ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=last)
-        ws.row_dimensions[row].height = 72
-        row += 1
+        for i, point in enumerate(notes.get(key) or [], 1):
+            title = point_title(point)
+            ws.cell(row=row, column=1, value=f"{i}. {title}".strip())
+            write_note(ws, row, 2, point_text(point))
+            ws.cell(row=row, column=2).alignment = Alignment(wrap_text=True, vertical="top")
+            ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=last)
+            ws.row_dimensions[row].height = 36
+            row += 1
     cell = ws.cell(row=row, column=1, value=DISCLAIMER)
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last)
     apply_structure_style(ws, [cell], "footnote")
@@ -904,10 +951,10 @@ def _summary(wb: Workbook, spec: dict) -> None:
     cell.alignment = Alignment(wrap_text=True, vertical="center")
 
     write_sheet_title(ws, facts["company"], last)
-    set_col_widths(ws, last, first=18, other=14)
-    ws.column_dimensions["B"].width = 28
+    set_col_widths(ws, last, first=22, other=14)
+    ws.column_dimensions["B"].width = 36
     ratio_rows = {
-        _row(ws, "上行空间"),
+        _row(ws, "较现价空间"),
         _row(ws, "营业收入同比增速"),
         _row(ws, "息税前利润率"),
         _row(ws, "归母净利润率"),
@@ -918,7 +965,8 @@ def _summary(wb: Workbook, spec: dict) -> None:
         _row(ws, "有效税率"),
     }
     apply_number_formats(ws, ratio_rows, last, None)
-    ws.cell(row=_row(ws, "投资评级"), column=2).number_format = "@"
+    for label in ("投资评级", "合理价值区间"):
+        ws.cell(row=_row(ws, label), column=2).number_format = "@"
 
 
 def _write_company_cover(ws, row: int, info: dict, last: int, fs) -> int:
@@ -1085,6 +1133,12 @@ def _col(ws, header: str) -> int:
     return find_col_by_header(ws, header)
 
 
+def _write_dash(ws, row: int, column: int) -> None:
+    cell = ws.cell(row=row, column=column, value="-")
+    cell.data_type = "s"
+    cell.alignment = Alignment(horizontal="right")
+
+
 def _row(ws, label: str) -> int:
     return find_row_by_label(ws, label)
 
@@ -1097,39 +1151,3 @@ def consensus_median_formula(first_inst: int, last_inst: int, col: str) -> str |
     if last_inst < first_inst:
         return None
     return f"=MEDIAN({col}{first_inst}:{col}{last_inst})"
-
-
-def _normalized_earnings_note(facts: dict) -> str:
-    income = facts.get("income") or {}
-    hist = list(facts.get("hist_periods") or [])
-    if not hist:
-        return "最近一年报告归母。一次性项目单独列示，不自动改 EPS。"
-    idx = len(hist) - 1
-    year = hist[idx]
-
-    def at(name: str) -> float | None:
-        rows = income.get(name) or []
-        if idx >= len(rows) or rows[idx] is None:
-            return None
-        try:
-            return float(rows[idx])
-        except (TypeError, ValueError):
-            return None
-
-    parts = [f"{year} 报告归母 {at('归母净利润')}"]
-    invest = at("投资收益")
-    nonop_inc = at("营业外收入")
-    nonop_exp = at("营业外支出")
-    impair = at("资产减值及公允价值变动")
-    extras = []
-    if invest is not None:
-        extras.append(f"投资收益 {invest}")
-    if nonop_inc is not None or nonop_exp is not None:
-        extras.append(f"营业外净额 {(nonop_inc or 0) - (nonop_exp or 0)}")
-    if impair is not None:
-        extras.append(f"减值及公允 {impair}")
-    if extras:
-        parts.append("一次性/非经营：" + "，".join(extras) + "。与同业比较时先看这些项是否已在利润里。")
-    else:
-        parts.append("未见单独列示的投资收益或营业外，按报告利润作 PE 基础。")
-    return "。".join(parts)

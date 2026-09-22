@@ -43,7 +43,7 @@ _COST_HINTS = ("毛利率", "费用率", "税率", "财务费用", "销售费用
 
 class CostDraft(BaseModel):
     gross_margin: dict[str, float] = Field(
-        description='预测年合并毛利率，小数如 {"2026E": 0.08}，不要写 8'
+        description='预测年合并毛利率，小数如 {"2026E": 0.08}'
     )
     sales_ratio: dict[str, float] = Field(description="预测年销售费用率，小数")
     admin_ratio: dict[str, float] = Field(description="预测年管理费用率，小数")
@@ -54,7 +54,7 @@ class CostDraft(BaseModel):
     nonop_inc: dict[str, float] = Field(description="预测年营业外收入，亿元")
     nonop_exp: dict[str, float] = Field(description="预测年营业外支出，亿元")
     other_op: dict[str, float] = Field(description="预测年其他经营净收益，亿元，可为负")
-    rationale: str = Field(description="按理由模板三段写。我们的数从轨迹推，不抄卖方中位。")
+    rationale: str = Field(description="按理由模板三段写：历史轨迹、卖方假设、我们的数")
     open_gaps: list[str] = Field(default_factory=list)
     sources: list[dict[str, str]] = Field(default_factory=list)
 
@@ -99,7 +99,6 @@ def _rationale_template(years: list[str]) -> str:
         (
             f"{year}：毛利率 {{小数}}。销售/管理/研发 {{小数}}/{{小数}}/{{小数}}。"
             "税率 {{小数}}。财务费用 {{亿元}}。{{怎么走到这个数}}。"
-            "不要写跟了谁，也不要抄谁的数字。"
             if i == 0
             else f"{year}：…"
         )
@@ -107,25 +106,25 @@ def _rationale_template(years: list[str]) -> str:
     )
     return (
         "【历史轨迹】\n"
-        "用注入的近年毛利率、三费率、税率、财务费用，只写会改预测的拐点。不要改这些历史数。\n"
+        "用注入的近年毛利率、三费率、税率、财务费用，只写会改预测的拐点。\n"
         "【卖方假设】\n"
         f"{street}\n"
-        "没有材料的年份只写「年份：」，后面留空，不要写「没有」。\n"
+        "没有材料的年份只写「年份：」，后面留空。\n"
         "【我们的数】\n"
         f"{ours}\n"
-        "没有卖方就按最近一年外推或小幅经营杠杆。不要合成中位当答案。\n"
-        "比率一律写小数（0.08 不是 8）。财务费用是亿元金额，历史为负也可以继续为负。"
+        "卖方假设只作对照。我们的数从注入轨迹和经营机制推；没有卖方就按最近一年外推或小幅经营杠杆。"
+        "比率写小数（0.08 不是 8）。财务费用是亿元金额，历史为负也可以继续为负。"
     )
 
 
 def _cost_instructions(ctx: RunContext[CostDeps]) -> str:
     deps = ctx.deps
     return (
-        f"你是{deps.label}的分析师，拍公司合并成本费用假设。只输出每年一个合并毛利率，不要拆分部毛利率。\n"
-        f"历史轨迹已经算好，禁止改。还可检索 {deps.searches_left} 次。\n"
+        f"你是{deps.label}的分析师，拍公司合并成本费用：每年一个合并毛利率。\n"
+        f"历史轨迹按注入数引用。还可检索 {deps.searches_left} 次。\n"
         "用 search_research 找卖方对合并毛利率、三费率、有效税率、财务费用的假设。"
-        "材料够了就停搜。搜不到就外推，缺口写进 open_gaps，不要假装有搜证。\n"
-        "只写预测年。比率用小数。rationale 按模板写。我们的数从轨迹和机制推，不抄卖方。\n"
+        "材料够了就停搜。搜不到就外推，缺口写进 open_gaps。\n"
+        "只写预测年、公司合并口径。比率用小数。rationale 按模板写；卖方假设只作对照，我们的数从轨迹和机制推。\n"
         f"{_rationale_template(deps.forecast_periods)}"
     )
 
@@ -242,12 +241,12 @@ def _cost_user(deps: CostDeps, hint: str) -> str:
         f"预测年：{years}\n"
         f"比率字段（小数）：{ratio}\n"
         f"金额字段（亿元）：{amount}\n"
-        "每个字段外层写年份。不要把历史年写进这些字段。\n"
-        "【已算好的历史轨迹】不要改：\n"
+        "每个字段外层写预测年。\n"
+        "【已算好的历史轨迹】\n"
         f"{format_hist_track(deps.hist_track)}\n"
     )
     if deps.briefs_text:
-        text += "【分部收入与研究笔记】只当产品结构背景。合并毛利率可写组合/单位盈利/其他，不要拆分部毛利率：\n"
+        text += "【分部收入与研究笔记】作产品结构背景，合并毛利率可写组合或单位盈利：\n"
         text += deps.briefs_text + "\n"
     if hint:
         text += hint
@@ -269,7 +268,7 @@ def _load_segment_revenue(run_dir: Path) -> str:
         lines.append(f"{name} 锁定历史收入 {hist}；预测驱动 {fcst}")
     if not lines:
         return ""
-    return "【已落盘分部收入】只作合并毛利率背景，不要据此另写分部毛利率：\n" + "\n".join(lines)
+    return "【已落盘分部收入】作合并毛利率的产品结构背景：\n" + "\n".join(lines)
 
 
 def _load_briefs(run_dir: Path) -> str:

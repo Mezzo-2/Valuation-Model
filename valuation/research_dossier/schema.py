@@ -31,7 +31,8 @@ BANNED = (
     "方向一致、幅度更保守/更积极",
 )
 
-COVER_KEYS = ("background", "thesis", "outlook", "risks", "sources")
+COVER_KEYS = ("thesis", "outlook", "risks", "sources")
+POINT_KEYS = ("thesis", "outlook", "risks")
 
 
 class SchemaError(ValueError):
@@ -49,9 +50,6 @@ def require_summary_notes(payload: dict) -> dict:
 
 
 def normalize_summary_notes(raw: dict) -> dict:
-    risks = raw.get("risks") or []
-    if isinstance(risks, str):
-        risks = [part.strip() for part in re.split(r"[\n；;]", risks) if part.strip()]
     sources = raw.get("sources") or []
     if isinstance(sources, str):
         sources = [part.strip() for part in re.split(r"[；;、\n]", sources) if part.strip()]
@@ -65,29 +63,25 @@ def normalize_summary_notes(raw: dict) -> dict:
         if text and text not in cleaned:
             cleaned.append(text)
     return {
-        "background": str(raw.get("background") or "").strip(),
-        "thesis": str(raw.get("thesis") or "").strip(),
-        "outlook": str(raw.get("outlook") or "").strip(),
-        "risks": [str(item).strip() for item in risks if str(item).strip()],
+        "thesis": _as_points(raw.get("thesis")),
+        "outlook": _as_points(raw.get("outlook")),
+        "risks": _as_points(raw.get("risks")),
         "sources": cleaned,
     }
 
 
 def validate_summary_notes(notes: dict) -> list[str]:
     errors: list[str] = []
-    for key in ("background", "thesis", "outlook"):
-        text = notes.get(key) or ""
-        if not text:
+    for key in POINT_KEYS:
+        items = notes.get(key) or []
+        if not items:
             errors.append(f"封面缺 {key}")
-        for token in BANNED:
-            if token in text:
-                errors.append(f"封面 {key} 含禁止用语 {token}")
-    if len(notes.get("risks") or []) < 3:
-        errors.append("封面风险须至少 3 条")
-    for item in notes.get("risks") or []:
-        for token in BANNED:
-            if token in item:
-                errors.append(f"风险含禁止用语 {token}")
+        for item in items:
+            if not point_text(item):
+                errors.append(f"封面 {key} 有空论点")
+            for token in BANNED:
+                if token in point_title(item) or token in point_text(item):
+                    errors.append(f"封面 {key} 含禁止用语 {token}")
     return errors
 
 
@@ -165,16 +159,11 @@ def validate_dossier(markdown: str, snapshot: dict, notes: dict | None = None) -
 def validate_cover_against(markdown: str, notes: dict) -> list[str]:
     errors: list[str] = []
     text = markdown or ""
-    for key, value in (
-        ("background", notes.get("background")),
-        ("thesis", notes.get("thesis")),
-        ("outlook", notes.get("outlook")),
-    ):
-        if value and not _cover_in_text(str(value), text):
-            errors.append(f"封面 {key} 无法在底稿中找到对应句")
-    for item in notes.get("risks") or []:
-        if not _cover_in_text(str(item), text):
-            errors.append("封面风险无法在底稿中找到对应句")
+    for key in POINT_KEYS:
+        for item in notes.get(key) or []:
+            body = point_text(item)
+            if body and not _cover_in_text(body, text):
+                errors.append(f"封面 {key} 无法在底稿中找到对应句")
     return errors
 
 
@@ -182,8 +171,77 @@ def format_sources(notes: dict) -> str:
     return "；".join(notes.get("sources") or [])
 
 
+def format_points(items: list | None) -> str:
+    lines = []
+    for i, item in enumerate(items or [], 1):
+        title = point_title(item)
+        text = point_text(item)
+        lines.append(f"{i}. {title} {text}".strip() if title else f"{i}. {text}")
+    return "\n".join(lines)
+
+
 def format_risks(notes: dict) -> str:
-    return "\n".join(notes.get("risks") or [])
+    return format_points(notes.get("risks") or [])
+
+
+def format_thesis(notes: dict) -> str:
+    return format_points(notes.get("thesis") or [])
+
+
+def format_outlook(notes: dict) -> str:
+    return format_points(notes.get("outlook") or [])
+
+
+def point_title(item: Any) -> str:
+    if isinstance(item, dict):
+        return str(item.get("title") or "").strip()
+    return ""
+
+
+def point_text(item: Any) -> str:
+    if isinstance(item, dict):
+        return str(item.get("text") or item.get("detail") or item.get("body") or "").strip()
+    return str(item or "").strip()
+
+
+def _as_points(value: Any) -> list[dict[str, str]]:
+    if isinstance(value, list):
+        raw = list(value)
+    elif str(value or "").strip():
+        raw = [value]
+    else:
+        raw = []
+    items: list[dict[str, str]] = []
+    for part in raw:
+        point = _as_point(part)
+        if point and (point["title"] or point["text"]):
+            items.append(point)
+    return items
+
+
+def _as_point(value: Any) -> dict[str, str] | None:
+    if isinstance(value, dict):
+        title = str(value.get("title") or "").strip()
+        text = str(value.get("text") or value.get("detail") or value.get("body") or "").strip()
+        title = _clean_title(title)
+        if text:
+            return {"title": title, "text": text}
+        if title:
+            return _as_point(title)
+        return None
+    raw = str(value or "").strip()
+    raw = re.sub(r"^\d+[\.、]\s*", "", raw).strip()
+    raw = raw.strip("* ")
+    if not raw:
+        return None
+    match = re.match(r"^([^。：:]{2,16})[。：:]\s+(.+)$", raw, flags=re.S)
+    if match and not re.match(r"^\d", match.group(1)):
+        return {"title": _clean_title(match.group(1)), "text": match.group(2).strip()}
+    return {"title": "", "text": raw}
+
+
+def _clean_title(title: str) -> str:
+    return re.sub(r"^[*【\[]+|[】\].。:：*]+$", "", str(title or "").strip())
 
 
 def _chapter(markdown: str, title: str) -> str:

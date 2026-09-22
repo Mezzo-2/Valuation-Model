@@ -49,8 +49,8 @@ class HistCell(BaseModel):
 
 
 class HistSeg(BaseModel):
-    name: str = Field(description="必须是 split_plan 里已有的分部名，不许改名")
-    years: list[HistCell] = Field(description="每个历史年一格，不许缺年")
+    name: str = Field(description="split_plan 里已有的分部名")
+    years: list[HistCell] = Field(description="每个历史年一格")
 
 
 class HistFill(BaseModel):
@@ -106,7 +106,7 @@ def _search_instructions(ctx: RunContext[HistFillDeps]) -> str:
     example = f"{deps.company} {deps.plan_names[0] if deps.plan_names else ''} 近三年分业务营业收入或占比"
     return (
         f"你为{deps.label}补搜历史分部收入，用来填已确认的拆分名单。\n"
-        f"已锁定分部：{names}。不许问名单外的新产品，不许问预测年。\n"
+        f"已锁定分部：{names}。问句点已锁定分部，不带预测年。\n"
         f"年报主营构成已有：{official}\n"
         f"还可检索 {deps.searches_left} 次。问句须含公司名或代码，并点一个已锁定分部或写分产品/分业务。\n"
         f"年报对得上的行不用再问。缺哪一年哪一行的历史收入或占比，就搜那一行。\n"
@@ -144,13 +144,12 @@ def _fill_instructions(ctx: RunContext[HistFillDeps]) -> str:
         f"分部必须恰好是：{names}。历史年必须恰好是：{years}。\n"
         f"对账锚：{totals}。每年分部加总必须对上该年{REVENUE_SCOPE}。"
         f"该年年报有父项时，该父口径下各子项加该父口径残差必须对上该父项。\n"
-        f"年报行名会改，要判断是同一条、父口径合计，还是新行；不要把父口径总数填进子项。"
+        f"年报行名会改，要判断是同一条、父口径合计，还是新行。"
+        f"子项只填该叶子自己的收入；父项披露数原样抄进父项行。"
         f"年报不再单列的叶子可以写 0，未拆开的金额进该父口径残差。\n"
-        f"年报父项有披露数就原样抄，禁止为了对上{REVENUE_SCOPE}去改年报父项。"
         f"公司层差额（{REVENUE_SCOPE}减去各年报父项合计）只能写入「{company_slot}」。\n"
         f"年报抄得到就抄；券商表能对上已锁定子项也可以用。缺的年可以按结构推算或把残差进「{residual}」。\n"
-        f"质量用：直接披露、有据可查、推算、倒推、兜底。\n"
-        f"不许增删分部，不写一致预期。"
+        f"质量用：直接披露、有据可查、推算、倒推、兜底。这一拍只拍历史金额。"
     )
 
 
@@ -584,7 +583,7 @@ def _fill_user(deps: HistFillDeps, hint: str) -> str:
         f"{year}={amount}" for year, amount in zip(deps.hist_periods, deps.revenue)
     )
     text = (
-        "检索结束，不要再检索。按已锁定名单拍出每个历史年的分部收入（亿元）。\n"
+        "检索结束。按已锁定名单拍出每个历史年的分部收入（亿元）。\n"
         f"分部：{'、'.join(deps.plan_names)}\n"
         f"历史年：{'、'.join(deps.hist_periods)}\n"
         f"{REVENUE_SCOPE}对账：{totals}\n"

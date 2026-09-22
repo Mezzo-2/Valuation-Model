@@ -208,11 +208,11 @@ def _caliber_search_instructions(ctx: RunContext[SplitAgentDeps]) -> str:
     official, rows, example = _official_lines(deps)
     return (
         f"你为{deps.label}写下一句检索问句，用来确认券商怎么拆，或决定停搜。\n"
-        f"年报父口径只做回归，不要写进问句：{official}。往年改名不是并列分部。{rows or ''}\n"
-        f"还可检索 {deps.searches_left} 次。问句写券商，不写卖方。点公司名。不要问预测年。\n"
+        f"年报父口径只做回归，问句点公司名：{official}。往年改名不是并列分部。{rows or ''}\n"
+        f"还可检索 {deps.searches_left} 次。问句写券商，不写卖方。问句不带预测年。\n"
         f"第一次只问券商怎么拆近三年主营收入。例如：{example}"
-        "看过 hits 后，若拆分表还不完整，用券商已经写出的行名补搜；"
-        "不要自己猜年报大类下面是什么。这一拍不查某条产品的出货够不够。"
+        "看过 hits 后，若拆分表还不完整，用券商已经写出的行名补搜。"
+        "这一拍不查某条产品的出货够不够。"
     )
 
 
@@ -221,9 +221,9 @@ def _evidence_search_instructions(ctx: RunContext[SplitAgentDeps]) -> str:
     leaves = "、".join(_leaf_names(deps.draft, deps.official_names)) or "（无更细叶子）"
     example = f"{deps.company} {leaves} 近三年收入、出货或单价。"
     return (
-        f"你为{deps.label}按已确认口径查数。不要再改名单、不要发明新产品。\n"
+        f"你为{deps.label}按已确认口径查数。名单已锁定，只查这些行的收入、出货或单价。\n"
         f"已确认叶子：{leaves}。\n"
-        f"还可检索 {deps.searches_left} 次。问句写券商，点公司名和已确认产品名。不要问预测年。\n"
+        f"还可检索 {deps.searches_left} 次。问句写券商，点公司名和已确认产品名。问句不带预测年。\n"
         f"例如：{example}"
         "缺哪一行的收入或出货，就补搜那一行。"
     )
@@ -233,8 +233,8 @@ def _caliber_instructions(ctx: RunContext[SplitAgentDeps]) -> str:
     deps = ctx.deps
     official, rows, _example = _official_lines(deps)
     return (
-        f"你是{deps.label}的口径确认。只锁定名单，不选方法，不填数字。\n"
-        f"年报父口径只用来回归：{official}。往年改名不要单独成行。{rows or ''}\n"
+        f"你是{deps.label}的口径确认。这一拍只锁名单。\n"
+        f"年报父口径只用来回归：{official}。往年改名不是并列分部。{rows or ''}\n"
         f"{CALIBER_RULES}"
     )
 
@@ -244,9 +244,9 @@ def _plan_instructions(ctx: RunContext[SplitAgentDeps]) -> str:
     official, rows, _example = _official_lines(deps)
     leaves = "、".join(_leaf_names(deps.draft, deps.official_names)) or "（停在年报）"
     return (
-        f"你是{deps.label}的拆分收口。口径已确认，按查数结果决定停在年报还是留下更细行，不选方法，不填数字。\n"
+        f"你是{deps.label}的拆分收口。口径已确认，按查数结果决定停在年报还是留下更细行。这一拍只锁名单。\n"
         f"年报父口径：{official}。{rows or ''}\n"
-        f"已确认叶子：{leaves}。只能留下这些行，或把过细的并进该父口径其余部分，不要手写第二个「其他」，不能新增口径外的产品。"
+        f"已确认叶子：{leaves}。只能留下这些行，或把过细的并进该父口径其余部分。"
     )
 
 
@@ -667,8 +667,7 @@ def _search_turn_user(deps: SplitAgentDeps, hint: str) -> str:
 def _caliber_user(deps: SplitAgentDeps, hint: str) -> str:
     hits = json.dumps(_compact_hits(deps.hits, limit=18), ensure_ascii=False)
     text = (
-        "检索已完成，不要再检索。照搬切片里的券商拆法，同意的合并，再挂回年报父口径。"
-        "不要选方法，不要填数字。\n"
+        "检索已完成。照搬切片里的券商拆法，同意的合并，再挂回年报父口径。这一拍只锁名单。\n"
         f"年报父口径（回归用）：{'、'.join(deps.official_names) or '无'}\n"
         f"hits={hits}\n"
     )
@@ -687,7 +686,7 @@ def _plan_user(deps: SplitAgentDeps, hint: str) -> str:
         found = line_traces(name, deps.hits)
         traces.append(f"{name}：{'、'.join(found) or '几乎没有可跟的数'}")
     text = (
-        "口径已确认。过细、几乎没有可跟的数的行并进其他。不要选方法，不要填数字，不要新增产品。\n"
+        "口径已确认。过细、几乎没有可跟的数的行并进该父口径其余部分。这一拍只锁名单。\n"
         f"年报父口径（回归用）：{'、'.join(deps.official_names) or '无'}\n"
         f"已确认口径：{'、'.join(item.name for item in (deps.draft.segments if deps.draft else [])) or '无'}\n"
     )
