@@ -4,6 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from valuation.segment_split.presentation import (
+    other_business,
+    row_remark,
+    source_files,
+    split_logic,
+    structure_change,
+)
 from valuation.shared.houses import short_house_name
 
 
@@ -22,10 +29,9 @@ def adapt_split(canonical: dict, facts: dict, forecasts: dict | None = None) -> 
                 "method": method,
                 "hist_revenue": [revenue[year] for year in hist],
                 "unit": canonical.get("revenue_unit") or "亿元",
-                "note": seg.get("note") or "",
+                "note": row_remark(seg, hist),
             }
         )
-    expl = canonical["split_explanation"]
     return {
         "company": canonical.get("company"),
         "ticker": canonical.get("ticker"),
@@ -34,10 +40,10 @@ def adapt_split(canonical: dict, facts: dict, forecasts: dict | None = None) -> 
             str(name).strip() for name in (canonical.get("official_parents") or []) if str(name).strip()
         ],
         "final_segments": segs,
-        "split_logic": expl["拆分逻辑"],
-        "hist_data_note": expl["历史数据说明"],
-        "other_note": expl["其他业务说明"],
-        "sources": expl["主要来源"],
+        "split_logic": split_logic(canonical),
+        "structure_change": structure_change(canonical, facts),
+        "other_note": other_business(canonical, facts),
+        "source_files": source_files(canonical),
     }
 
 

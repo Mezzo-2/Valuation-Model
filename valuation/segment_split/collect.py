@@ -244,7 +244,7 @@ def _mcp_typed_search(
     *,
     start: str | None = None,
 ):
-    """单类 contentTypes 检索。brief_agent 主控四轮召回。"""
+    """单类 contentTypes 检索。brief_agent 按信息缺口控制多轮召回。"""
     start = start or (datetime.now() - timedelta(days=365 * 3)).strftime("%Y-%m-%d")
 
     def search(
@@ -403,6 +403,7 @@ def _parse_official(payload: Any, classify: str) -> dict[str, Any]:
                     "revenue_raw": raw,
                     "is_total": name in TOTAL_NAMES,
                     "source_tool": "get_main_business_segments",
+                    "publish_date": _biz_date(rec.get("publishDate")),
                 }
             )
     return {"item_classify": classify, "rows": rows}

@@ -27,7 +27,7 @@ class ForecastDraft(BaseModel):
     )
     why_method: str = Field(
         default="",
-        description="为何用这个方法。量价写清哪侧有搜证、哪侧用锁定收入回推",
+        description="为何这个方法最能解释本分部；若使用回推或指数，说明其分析性质",
     )
     historical_data: dict[str, dict[str, float]] = Field(
         default_factory=dict,
@@ -37,10 +37,13 @@ class ForecastDraft(BaseModel):
         description="外层是方法字段，内层是年份。收入增速法如 {\"收入增速\": {\"2026E\": 0.18}}，用小数"
     )
     final_rationale: str = Field(
-        description="按理由模板三段写：事件发酵、卖方假设、我们的数"
+        description="分析师对历史、近期变化、卖方分歧和三年预测路径的独立判断，写清主要取舍"
     )
     open_gaps: list[str] = Field(default_factory=list)
-    sources: list[dict[str, str]] = Field(default_factory=list)
+    sources: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="只列影响判断的来源；每条用 source_title、house、as_of、horizon、summary 键，不要把机构名当键",
+    )
     unit_meta: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -64,42 +67,19 @@ class ForecastDeps:
         return [str(year) for year in (self.facts.get("forecast_periods") or [])]
 
 
-def _rationale_template(years: list[str]) -> str:
-    ev = "\n".join(
-        (
-            f"{year}：{{哪件事、何时开始贡献、先改量还是价还是结构}}。只写会进本分部该年驱动的事。"
-            if i == 0
-            else f"{year}：…"
-        )
-        for i, year in enumerate(years)
-    ) or "（按预测年逐行写）"
-    street = "\n".join(
-        (
-            f"{year}：{{机构}} {{报告日}} {{目标期}} {{数字}}，假设是{{…}}。下一家同理。只写对本分部该指标有假设的机构。"
-            if i == 0
-            else f"{year}：…"
-        )
-        for i, year in enumerate(years)
-    )
-    ours = "\n".join(
-        (
-            f"{year}：{{数字}}。{{量、价或结构各自怎么变，怎么走到这个数}}。"
-            if i == 0
-            else f"{year}：…"
-        )
-        for i, year in enumerate(years)
-    )
+def _analyst_guidance() -> str:
     return (
-        "【事件发酵】\n"
-        f"{ev}\n"
-        "【卖方假设】\n"
-        f"{street}\n"
-        "没有材料的年份只写「年份：」，后面留空。\n"
-        "【我们的数】\n"
-        f"{ours}\n"
-        "卖方假设只作对照。我们的数写本分部该年的量、价或结构路径。"
-        "没有事件可推的年份，写回落或外推。"
-        "材料只写会进本分部该指标的事实。"
+        "先读 brief 的关键发现、降权材料和缺口，想清楚本分部历史变化由什么推动，"
+        "哪些新事件可能延续、加速或逆转它。不要把材料逐条改写成预测。"
+        "可以形成与卖方不同的判断，也不要机械取平均；说明你更相信哪些较新、同口径的材料，"
+        "哪些观点因时效或范围不同只能作参考。"
+        "给出三年的经营路径：首年的基数和变化、后两年为何加速或放缓，量、价、结构或需求如何传导到所选方法的数字。"
+        "如果已有首年季度或半年实际，用全年预测反推剩余期间需要达到的收入与增速，"
+        "检视这是否符合项目节奏与基数变化，并解释关键的加速或回落。"
+        "若隐含的剩余期间趋势明显偏离已实现趋势，需要能指出足以支撑转折的具体变化；"
+        "仅仅缺少订单数据不能证明收入会大幅下滑，行业高增长也不能证明公司收入会大幅上行。"
+        "用自然的分析师文字解释主要取舍和关键不确定性，不必为每个参数写证据编号或固定三段模板。"
+        "尚未证实的订单或合作可作为判断的一部分，但要区分已实现、较有把握和仍待兑现。"
     )
 
 
@@ -123,8 +103,8 @@ def _driver_hint(method: str, hist_need: str) -> str:
     if method in QTY_METHODS:
         return (
             "历史销量×单价/fx 对上已锁定的分部收入。"
-            "先用笔记里已实现的量或价；缺的一侧用锁定收入回推。"
-            "unit_meta.fx 自报。两侧都没有，缺口写进 open_gaps，仍须交出能对账的数。"
+            "先用笔记里已实现的量或价；缺的一侧可用锁定收入回推。"
+            "若用指数，说明它是分析代理变量。unit_meta.fx 自报。"
         )
     if method in FX_METHODS:
         return (
@@ -160,8 +140,8 @@ def _forecast_instructions(ctx: RunContext[ForecastDeps]) -> str:
     return (
         f"你是{deps.label}的分析师。笔记是材料，用锁定分部收入对账。\n"
         f"{pick}\n"
-        "historical_data 只写历史年。final_rationale 按模板写；卖方假设只作对照，我们的数写量、价或结构路径。\n"
-        f"{_rationale_template(deps.forecast_periods)}"
+        "historical_data 只写历史年；预测数字由你根据材料独立判断。\n"
+        f"{_analyst_guidance()}"
     )
 
 
@@ -278,8 +258,7 @@ def _forecast_user(deps: ForecastDeps, hint: str) -> str:
             f"{_field_map()}"
         )
     text = (
-        "检索已结束。final_rationale 按下面模板写。\n"
-        f"{_rationale_template(deps.forecast_periods)}\n"
+        "检索已结束。先判断材料的权重和经营机制，再写预测数字与 final_rationale。\n"
         f"{method_line}\n"
         f"历史年：{hist}  预测年：{fcst}\n"
         f"已锁定分部收入：{json.dumps(rev, ensure_ascii=False)}\n"

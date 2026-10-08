@@ -43,7 +43,7 @@ class HistCell(BaseModel):
     year: str = Field(description="历史年，须与 facts 的 2023A 这种键一致")
     amount: float = Field(description="该年该分部营业收入，亿元")
     quality: Literal["直接披露", "有据可查", "推算", "倒推", "兜底"] = Field(
-        description="格子质量。年报或券商表抄到的用直接披露或有据可查"
+        description="格子质量。年报原行用直接披露；券商原表有对应数字用有据可查"
     )
     why: str = Field(description="这个数从哪来，或为何推算/倒推")
 
@@ -53,16 +53,23 @@ class HistSeg(BaseModel):
     years: list[HistCell] = Field(description="每个历史年一格")
 
 
+class SourceDocument(BaseModel):
+    title: str = Field(description="检索结果中的完整文件标题")
+    date: str = Field(description="检索结果中的发布日期，YYYY-MM-DD")
+    institution: str = Field(default="", description="券商或发布机构")
+
+
 class HistFill(BaseModel):
     """历史拆分回填。名单已锁定，这里只拍金额。"""
 
     fill_method: Literal["官方抄录", "卖方抄录", "残差倒推", "结构推算"]
     segments: list[HistSeg]
     split_logic: str
-    hist_data_note: str
+    hist_data_note: str = ""  # 兼容旧回填卡；结构变化由历史数确定
     other_note: str
-    sources_text: str
-    final_rationale: str
+    sources_text: str = ""  # 兼容旧回填卡；来源文件改用结构化清单
+    source_documents: list[SourceDocument] = Field(default_factory=list)
+    final_rationale: str = ""
 
 
 @dataclass
@@ -77,10 +84,12 @@ class HistFillDeps:
     official_names: list[str]
     official_rows: list[dict[str, Any]]
     search: SearchFn
+    plan_caliber: str = "official"
     max_searches: int = MAX_HIST_SEARCHES
     verbose: bool = True
     stage: str = "hist"
     hits: list[dict[str, Any]] = field(default_factory=list)
+    prior_hits: list[dict[str, Any]] = field(default_factory=list)
     queries: list[dict[str, Any]] = field(default_factory=list)
     search_seq: int = 0
 
@@ -149,7 +158,12 @@ def _fill_instructions(ctx: RunContext[HistFillDeps]) -> str:
         f"年报不再单列的叶子可以写 0，未拆开的金额进该父口径残差。\n"
         f"公司层差额（{REVENUE_SCOPE}减去各年报父项合计）只能写入「{company_slot}」。\n"
         f"年报抄得到就抄；券商表能对上已锁定子项也可以用。缺的年可以按结构推算或把残差进「{residual}」。\n"
-        f"质量用：直接披露、有据可查、推算、倒推、兜底。这一拍只拍历史金额。"
+        f"质量用：直接披露（年报原行）、有据可查（券商原表）、推算、倒推、兜底。why 逐格写取数依据，但不要重复套话。\n"
+        "split_logic 具体解释采用哪些年报分部、为什么保留或下钻哪些业务，以及未单列业务的边界；不要抄逐年加总式。"
+        "other_note 解释“其他”或父口径残差代表什么、哪些内容不能确定；不要重复逐年算式。"
+        "结构变化由程序根据已确认的历史金额计算，无需写到 hist_data_note。"
+        "source_documents 只列实际用于本次拆分或金额回填的检索文件，标题、机构、日期须与 hits 完全对应；"
+        "年报接口记录无需填入，程序会单独列示。sources_text 留空。"
     )
 
 
@@ -189,6 +203,8 @@ def run_live_hist_fill(run_dir: Path) -> dict:
     if len(segs) < 2:
         raise SystemExit("split_plan 分部不足两行")
     official = _load_official(run_dir, facts)
+    split_pack_path = logs_dir(run_dir) / "evidence" / "split_pack.json"
+    split_pack = load_json(split_pack_path) if split_pack_path.is_file() else {}
     hist = list(facts["hist_periods"])
     revenue = [float(item) for item in facts["income"][REVENUE_SCOPE]]
     fcst = [str(item)[:4] for item in (facts.get("forecast_periods") or [])]
@@ -205,8 +221,10 @@ def run_live_hist_fill(run_dir: Path) -> dict:
             revenue=revenue,
             plan_names=[str(item["name"]).strip() for item in segs],
             plan_segments=segs,
+            plan_caliber=str(plan.get("caliber") or "official"),
             official_names=[str(name).strip() for name in (plan.get("official_parents") or []) if str(name).strip()],
             official_rows=list(official.get("rows") or []),
+            prior_hits=list(split_pack.get("vector_hits") or []),
             search=_mcp_search(mcp, calls, log_root),
         )
         draft = run_hist_fill(deps)
@@ -225,7 +243,7 @@ def run_live_hist_fill(run_dir: Path) -> dict:
         },
     )
     try:
-        return notes_from_draft(facts, plan, official, draft)
+        return notes_from_draft(facts, plan, official, draft, hits=[*deps.prior_hits, *deps.hits])
     except SchemaError as exc:
         raise SystemExit("历史拆分回填未通过规范表:\n  " + "\n  ".join(exc.errors)) from exc
 
@@ -262,36 +280,59 @@ def compile_hist_fill(deps: HistFillDeps, *, model=None) -> HistFill:
     raise SchemaError(last_errors or ["写历史回填失败"])
 
 
-def notes_from_draft(facts: dict, plan: dict, official: dict, draft: HistFill) -> dict:
+def notes_from_draft(
+    facts: dict, plan: dict, official: dict, draft: HistFill, *, hits: list[dict[str, Any]] | None = None
+) -> dict:
     hist = list(facts["hist_periods"])
     by_name = {str(item.name).strip(): item for item in draft.segments}
     last = hist[-1] if hist else ""
     last_total = float(facts["income"][REVENUE_SCOPE][-1]) if facts["income"][REVENUE_SCOPE] else 0.0
-    sources = [
-        {
-            "source_id": "S1",
+    sources: list[dict[str, Any]] = []
+    seen_years: set[str] = set()
+    for official_row in official.get("rows") or []:
+        year = str(official_row.get("period") or "")[:4]
+        if not year or year in seen_years:
+            continue
+        seen_years.add(year)
+        sources.append({
+            "source_id": f"S{len(sources) + 1}",
             "source_tool": "get_main_business_segments",
-            "source_title": "年报主营构成（按产品/营业收入）",
+            "source_title": f"年报主营构成数据（{facts.get('company') or plan.get('company')} {year} 年度；接口未提供文件名）",
+            "published": str(official_row.get("publish_date") or ""),
             "summary": official.get("item_classify") or "按产品",
             "segments_identified": [str(item.get("name") or "") for item in plan.get("segments") or []],
-        }
-    ]
-    sources.append(
-        {
-            "source_id": "S2",
+        })
+    available = {
+        (str(hit.get("title") or "").strip(), str(hit.get("date") or "").strip()): hit
+        for hit in (hits or []) if hit.get("title") and hit.get("date")
+    }
+    seen_docs: set[tuple[str, str]] = set()
+    for doc in draft.source_documents:
+        key = (doc.title.strip(), doc.date.strip())
+        hit = available.get(key)
+        if hit is None or key in seen_docs:
+            continue
+        seen_docs.add(key)
+        sources.append({
+            "source_id": f"S{len(sources) + 1}",
             "source_tool": "searchComeinResource",
-            "source_title": "拆分计划确认后的历史检索",
-            "summary": draft.sources_text or "模型按已锁定分部补搜历史收入",
+            "source_title": doc.title.strip(),
+            "institution": str(hit.get("institution") or doc.institution).strip(),
+            "published": doc.date.strip(),
             "segments_identified": [str(item.name) for item in draft.segments],
-        }
-    )
+        })
+    if not sources:
+        sources.append({
+            "source_id": "S1", "source_tool": "get_main_business_segments",
+            "source_title": "年报主营构成数据（接口未提供文件名）", "published": "",
+            "segments_identified": [str(item.name) for item in draft.segments],
+        })
     final_segments = []
     for item in plan.get("segments") or []:
         name = str(item.get("name") or "").strip()
         row = by_name[name]
         revenue = {cell.year: float(cell.amount) for cell in row.years}
         quality = {cell.year: cell.quality for cell in row.years}
-        why = "；".join(cell.why for cell in row.years if cell.why)
         amount = revenue.get(last)
         share = float(amount) / last_total if last_total and amount is not None else None
         tag = _note_tag(quality.get(last) or "推算")
@@ -302,9 +343,9 @@ def notes_from_draft(facts: dict, plan: dict, official: dict, draft: HistFill) -
                 "预测方法": "",
                 "historical_revenue": revenue,
                 "data_quality": quality,
-                "source_refs": ["S1", "S2"],
+                "source_refs": [source["source_id"] for source in sources],
                 "revenue_share_latest": share,
-                "note": f"{tag} {why or '按已确认名单回填历史收入。'}",
+                "note": tag,
             }
         )
     fill_method = draft.fill_method if draft.fill_method in FILL_METHODS else "残差倒推"
@@ -327,16 +368,16 @@ def notes_from_draft(facts: dict, plan: dict, official: dict, draft: HistFill) -
         "final_segments": final_segments,
         "split_explanation": {
             "拆分逻辑": draft.split_logic,
-            "历史数据说明": draft.hist_data_note,
+            "结构变化": "由历史收入计算",
             "其他业务说明": draft.other_note,
-            "主要来源": draft.sources_text,
+            "来源文件": "见来源清单",
         },
         "final_rationale": draft.final_rationale,
         "sources": sources,
     }
     for key in EXPLAIN_KEYS:
         if not str(notes["split_explanation"].get(key) or "").strip():
-            notes["split_explanation"][key] = "见回填说明。"
+            notes["split_explanation"][key] = "见历史数据及来源清单。"
     if not str(notes["final_rationale"] or "").strip():
         notes["final_rationale"] = notes["split_explanation"]["拆分逻辑"]
     return require_split(notes, facts, require_method=False)
@@ -409,6 +450,17 @@ def hist_errors(deps: HistFillDeps, draft: HistFill) -> list[str]:
         errors.extend(_parent_year_errors(deps, year, amounts, qualities, parent_of, official))
     if draft.fill_method not in FILL_METHODS:
         errors.append(f"fill_method 非法: {draft.fill_method}")
+    available = {
+        (str(hit.get("title") or "").strip(), str(hit.get("date") or "").strip())
+        for hit in [*deps.prior_hits, *deps.hits]
+    }
+    for doc in draft.source_documents:
+        if (doc.title.strip(), doc.date.strip()) not in available:
+            errors.append(f"来源文件不在检索结果中: {doc.title}｜{doc.date}")
+    if (deps.plan_caliber == "drilled" or any(
+        cell.quality == "有据可查" for seg in draft.segments for cell in seg.years
+    )) and not draft.source_documents:
+        errors.append("细分口径或券商取数须列至少一份实际使用的检索文件")
     return errors
 
 
@@ -483,13 +535,23 @@ def _parent_year_errors(
 
 
 def _load_official(run_dir: Path, facts: dict) -> dict[str, Any]:
-    from valuation.segment_split.collect import _fetch_official, _market_and_code
+    from valuation.segment_split.collect import _fetch_official, _market_and_code, _parse_official
 
     pack_path = logs_dir(run_dir) / "evidence" / "split_pack.json"
     if pack_path.is_file():
         pack = load_json(pack_path)
         official = pack.get("official_segments") or {}
         if official.get("rows"):
+            if not any(row.get("publish_date") for row in official["rows"]):
+                raw_path = logs_dir(run_dir) / "mcp" / "get_main_business_segments.json"
+                if raw_path.is_file():
+                    dated = _parse_official(load_json(raw_path), official.get("item_classify") or "按产品")
+                    dates = {
+                        (row["period"], row["name"]): row.get("publish_date")
+                        for row in dated.get("rows") or []
+                    }
+                    for row in official["rows"]:
+                        row["publish_date"] = dates.get((row.get("period"), row.get("name")), "")
             return official
     ticker = str(facts.get("ticker") or "")
     full_code = str(facts.get("full_code") or "")
@@ -579,6 +641,12 @@ def _search_user(deps: HistFillDeps, hint: str) -> str:
 
 def _fill_user(deps: HistFillDeps, hint: str) -> str:
     hits = json.dumps(_compact_hits(deps.hits, limit=18, names=deps.plan_names), ensure_ascii=False)
+    source_candidates = [
+        {"title": hit.get("title"), "date": hit.get("date"), "institution": hit.get("institution")}
+        for hit in [*deps.prior_hits, *deps.hits]
+        if hit.get("title") and hit.get("date")
+    ]
+    source_candidates = list({(item["title"], item["date"]): item for item in source_candidates}.values())[:30]
     totals = "；".join(
         f"{year}={amount}" for year, amount in zip(deps.hist_periods, deps.revenue)
     )
@@ -589,6 +657,7 @@ def _fill_user(deps: HistFillDeps, hint: str) -> str:
         f"{REVENUE_SCOPE}对账：{totals}\n"
         f"年报：{_official_text(deps)}\n"
         f"hits={hits}\n"
+        f"可选来源文件={json.dumps(source_candidates, ensure_ascii=False)}\n"
     )
     if hint:
         text += hint

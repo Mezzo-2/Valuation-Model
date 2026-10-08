@@ -14,6 +14,7 @@ from valuation.segment_split.schema import t_recon
 from valuation.workbook.anchors import (
     CellAnchor,
     find_col_by_header,
+    find_label_position,
     find_row_by_label,
     find_row_in_group,
     group_title_above,
@@ -173,7 +174,7 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
             fails.append(str(exc))
 
     sm = wb["总结"]
-    formula_labels = (
+    overview_labels = (
         "目标PE",
         "合理价值区间",
         "中枢目标价",
@@ -182,6 +183,15 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
         "当前股价",
         "EPS_最近实际",
         "EPS_预测首年",
+    )
+    for label in overview_labels:
+        try:
+            cell = _summary_adjacent_value(sm, label).value
+            if not (isinstance(cell, str) and str(cell).startswith("=")):
+                fails.append(f"总结!{label} 不是公式")
+        except ValueError as exc:
+            fails.append(str(exc))
+    matrix_labels = (
         "营业收入",
         "营业收入同比增速",
         "毛利",
@@ -195,16 +205,15 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
         "研发费用率",
         "有效税率",
     )
-    for label in formula_labels:
+    for label in matrix_labels:
         try:
-            r = find_row_by_label(sm, label)
-            cell = sm.cell(row=r, column=2).value
+            cell = _summary_adjacent_value(sm, label).value
             if not (isinstance(cell, str) and str(cell).startswith("=")):
                 fails.append(f"总结!{label} 不是公式")
         except ValueError as exc:
             fails.append(str(exc))
 
-    narrative = ("投研逻辑", "未来展望", "主要风险")
+    narrative = ("投资逻辑", "未来展望", "主要风险")
     for title in narrative:
         try:
             find_row_by_label(sm, title)
@@ -213,10 +222,13 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
     if any(
         "数据缺口" in str(sm.cell(row=r, column=c).value or "")
         for r in range(1, (sm.max_row or 1) + 1)
-        for c in range(1, 6)
+        for c in range(1, 13)
     ):
         format_fails.append("总结出现数据缺口")
-    last_text = str(sm.cell(row=sm.max_row, column=1).value or "")
+    last_row = sm.max_row or 1
+    last_text = " ".join(
+        str(sm.cell(row=last_row, column=c).value or "") for c in range(1, 13)
+    )
     if "不构成投资建议" not in last_text:
         format_fails.append("总结最后一行不是免责声明")
 
@@ -245,6 +257,17 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
         "workbook": str(workbook_path),
     }
     return report
+
+
+def _summary_adjacent_value(ws: Worksheet, label: str):
+    """总结页标签在 A/C 或 G/I。第二列标签跨两列时，数值在合并区右侧。"""
+    row, col = find_label_position(ws, label)
+    value_col = col + 1
+    for merged in ws.merged_cells.ranges:
+        if merged.min_row <= row <= merged.max_row and merged.min_col == col:
+            value_col = merged.max_col + 1
+            break
+    return ws.cell(row=row, column=value_col)
 
 
 def formula_is_dangerous(text: str) -> bool:

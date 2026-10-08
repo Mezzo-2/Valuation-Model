@@ -96,6 +96,9 @@ class CostAndCompsValidationTests(unittest.TestCase):
         bad = dict(card)
         bad["minority"] = {"2026E": 1.01}
         self.assertTrue(any("minority" in item for item in validate_cost(bad, facts)))
+        neg = dict(card)
+        neg["minority"] = {"2026E": -0.027}
+        self.assertEqual(validate_cost(neg, facts), [])
 
     def test_pe_adjust_and_currency(self):
         facts = {"as_of": "2026-09-01"}

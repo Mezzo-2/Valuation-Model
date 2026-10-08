@@ -25,6 +25,8 @@ _PERIOD_HEADER_RE = re.compile(r"^\d{4}(?:A|E|Q[1-4][AE])$")
 # 历史财务数据左右分栏：利润表/指标在 A，资产负债表在 F。
 _FS_LABEL_COLS = (1, 6)
 _FS_YEAR_SPAN = 3
+# 总结页标签在左栏 A/C 与右栏 G/I。
+_SUMMARY_LABEL_COLS = (1, 3, 7, 9)
 
 
 @dataclass(frozen=True)
@@ -55,9 +57,11 @@ def _quote_sheet_name(name: str) -> str:
     return "'" + name.replace("'", "''") + "'"
 
 
-def _fs_label_cols(ws: Worksheet, label_col: int) -> tuple[int, ...]:
+def _label_cols(ws: Worksheet, label_col: int) -> tuple[int, ...]:
     if ws.title == "历史财务数据" and label_col == 1:
         return _FS_LABEL_COLS
+    if ws.title == "总结" and label_col == 1:
+        return _SUMMARY_LABEL_COLS
     return (label_col,)
 
 
@@ -74,7 +78,7 @@ def find_label_position(
     scan_min = min_row
     scan_max = ws.max_row if max_row is None else max_row
     matches: list[tuple[int, int]] = []
-    for col in _fs_label_cols(ws, label_col):
+    for col in _label_cols(ws, label_col):
         for r in range(scan_min, scan_max + 1):
             value = _normalize_text(ws.cell(row=r, column=col).value)
             if not value:

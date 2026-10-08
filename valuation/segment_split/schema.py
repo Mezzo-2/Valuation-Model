@@ -33,7 +33,7 @@ METHOD_ALIASES = {"收入增速兜底": "收入增速法"}
 QUALITY = frozenset({"直接披露", "有据可查", "行业推算", "推算", "倒推", "兜底"})
 FILL_METHODS = frozenset({"官方抄录", "卖方抄录", "残差倒推", "结构推算"})
 SPLIT_CALIBERS = frozenset({"official", "sellside", "spec_mix"})
-EXPLAIN_KEYS = ("拆分逻辑", "历史数据说明", "其他业务说明", "主要来源")
+EXPLAIN_KEYS = ("拆分逻辑", "结构变化", "其他业务说明", "来源文件")
 FALLBACK_METHOD = "收入增速法"
 REVENUE_SCOPE = "营业收入"
 RECON_PCT = 0.005
@@ -84,10 +84,15 @@ def normalize_split(raw: dict, facts: dict) -> dict:
         segs = [_upgrade_legacy_seg(seg, hist, facts) for seg in segs_in]
         expl = {
             "拆分逻辑": str(raw.get("split_logic") or ""),
-            "历史数据说明": str(raw.get("hist_data_note") or ""),
+            "结构变化": str(raw.get("structure_change") or raw.get("hist_data_note") or ""),
             "其他业务说明": str(raw.get("other_note") or ""),
-            "主要来源": _legacy_sources_text(raw.get("sources")),
+            "来源文件": _legacy_sources_text(raw.get("sources")),
         }
+    # 老卡保留兼容；新工作簿以四个清晰标题呈现。
+    if "结构变化" not in expl:
+        expl["结构变化"] = str(expl.get("历史数据说明") or "由历史收入计算")
+    if "来源文件" not in expl:
+        expl["来源文件"] = str(expl.get("主要来源") or _legacy_sources_text(raw.get("sources")) or "见来源清单")
     sources = raw.get("sources")
     if not isinstance(sources, list):
         sources = [
@@ -95,7 +100,7 @@ def normalize_split(raw: dict, facts: dict) -> dict:
                 "source_id": "S1",
                 "source_tool": "fixture",
                 "source_title": "历史拆分来源",
-                "summary": expl.get("主要来源") or "未单列来源",
+                "summary": expl.get("来源文件") or "未单列来源",
                 "segments_identified": [seg["name"] for seg in segs],
             }
         ]

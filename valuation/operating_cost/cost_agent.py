@@ -49,7 +49,9 @@ class CostDraft(BaseModel):
     admin_ratio: dict[str, float] = Field(description="预测年管理费用率，小数")
     rd_ratio: dict[str, float] = Field(description="预测年研发费用率，小数")
     tax_rate: dict[str, float] = Field(description="预测年有效税率，小数，0–1")
-    minority: dict[str, float] = Field(description="预测年少数股东比率，小数，常为 0")
+    minority: dict[str, float] = Field(
+        description="预测年少数股东比率，小数，-1–1。少数股东承担亏损时为负"
+    )
     fin_exp: dict[str, float] = Field(description="预测年财务费用，亿元金额，可为负")
     nonop_inc: dict[str, float] = Field(description="预测年营业外收入，亿元")
     nonop_exp: dict[str, float] = Field(description="预测年营业外支出，亿元")
