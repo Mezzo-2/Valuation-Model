@@ -66,6 +66,7 @@ def snapshot_from_spec(spec: dict, *, run_dir: Path | None = None) -> dict[str, 
     snap = {
         "company": facts["company"],
         "ticker": facts.get("ticker"),
+        "as_of": facts.get("as_of") or facts.get("as_of_date") or "",
         "hist_periods": hist,
         "forecast_periods": fcst,
         "last_actual": last_a,

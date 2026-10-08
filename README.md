@@ -40,7 +40,7 @@ python3 -m venv .venv
 
 Comein 读 `~/.cursor/mcp.json` 的 `comein-mcp-all`，或环境变量 `VALUATION_MCP_URL` + `VALUATION_MCP_KEY`。旧名 `SPIKE_*` 仍可用。密钥放 `.env`，不要提交。
 
-`historical_financials` 拉财报，`segment_split` 只定名单，不定方法；确认后再由模型按计划补搜并拍出历史分部收入，代码只校验加总对得上营业收入。分部研究按分部先由 brief 收四类材料，再由 forecast 选方法并给出我们的预测。运营成本由公司级 agent 按历史轨迹检索卖方后落假设。一致预期和同业在同一步：代码拉本公司盈利预测，同业预测首年 PE 取 pricePerformance.peForward，agent 只提名和分核心。研究底稿由分析师 agent 先写 Markdown，再抽出 `summary_notes.json` 填总结叙述区；`--rebuild-only` 不重写底稿。不加 `--auto-approve` 时，改完 JSON 再 `--resume`。
+`historical_financials` 拉财报，`segment_split` 只定名单，不定方法；确认后再由模型按计划补搜并拍出历史分部收入，代码只校验加总对得上营业收入。分部研究按分部先由 brief 收四类材料，再由 forecast 选方法并给出我们的预测。运营成本由公司级 agent 按历史轨迹检索卖方后落假设。一致预期和同业在同一步：代码拉本公司盈利预测，同业预测首年 PE 取 pricePerformance.peForward，agent 只提名和分核心。研究底稿由分析师 agent 结合已有 brief 一次生成 Markdown 和 `summary_notes.json`；底稿写明研究口径、最新经营验证、反证与跟踪，摘要填入 Excel 总结叙述区。`--rebuild-only` 不重写底稿。不加 `--auto-approve` 时，改完 JSON 再 `--resume`。
 
 ## 产物
 

@@ -9,17 +9,18 @@ from valuation.shared.houses import short_house_name
 
 CHAPTERS = (
     "投资要点",
+    "研究口径与最新经营验证",
     "投资逻辑",
     "业务展望",
     "盈利预测",
     "估值与评级",
+    "反证与跟踪",
     "主要风险",
 )
 
 DISCLAIMER = "本模型由 AI 根据公开资料自动生成，仅供研究演示，不构成投资建议。"
 
 BANNED = (
-    "数据缺口",
     "【事件发酵】",
     "事件发酵",
     "final_rationale",
@@ -30,6 +31,7 @@ BANNED = (
     "拆分计划确认后的历史检索",
     "方向一致、幅度更保守/更积极",
 )
+SUMMARY_BANNED = ("数据缺口", *BANNED)
 
 COVER_KEYS = ("thesis", "outlook", "risks", "sources")
 POINT_KEYS = ("thesis", "outlook", "risks")
@@ -79,7 +81,7 @@ def validate_summary_notes(notes: dict) -> list[str]:
         for item in items:
             if not point_text(item):
                 errors.append(f"封面 {key} 有空论点")
-            for token in BANNED:
+            for token in SUMMARY_BANNED:
                 if token in point_title(item) or token in point_text(item):
                     errors.append(f"封面 {key} 含禁止用语 {token}")
     return errors
@@ -88,9 +90,15 @@ def validate_summary_notes(notes: dict) -> list[str]:
 def validate_dossier(markdown: str, snapshot: dict, notes: dict | None = None) -> list[str]:
     errors: list[str] = []
     text = markdown or ""
+    headings = [
+        re.sub(r"^[一二三四五六七八九十0-9]+[、.．]\s*", "", heading.strip())
+        for heading in re.findall(r"(?m)^##(?!#)\s*(.+?)\s*$", text)
+    ]
     for title in CHAPTERS:
-        if title not in text:
+        if title not in headings:
             errors.append(f"缺章节 {title}")
+    if [title for title in headings if title in CHAPTERS] != list(CHAPTERS):
+        errors.append("底稿章节顺序不符")
     display = snapshot.get("display") or {}
     first = _chapter(text, "投资要点") or text[:1200]
     rating = str(display.get("rating") or "")
@@ -129,6 +137,19 @@ def validate_dossier(markdown: str, snapshot: dict, notes: dict | None = None) -
         errors.append("底稿不要写数据来源章节")
     if re.search(r"(证券|国际|研究|银行)\[\d+\]", text):
         errors.append("正文不要标引用角标")
+    scope_ch = _chapter(text, "研究口径与最新经营验证")
+    as_of = str(snapshot.get("as_of") or "")[:10]
+    if as_of and as_of not in scope_ch:
+        errors.append(f"研究口径未写资料截止日 {as_of}")
+    counter_ch = _chapter(text, "反证与跟踪")
+    alternative = _subsection(counter_ch, "替代解释")
+    tracking = _subsection(counter_ch, "跟踪指标")
+    if not alternative or not tracking:
+        errors.append("反证与跟踪须分别写替代解释和跟踪指标")
+    elif _cjk_len(alternative) < 60 or _cjk_len(tracking) < 25:
+        errors.append("反证或跟踪条件过短")
+    if counter_ch and not any(token in counter_ch for token in ("收入", "毛利率", "EPS", "目标PE", "目标价")):
+        errors.append("反证未说明受影响的盈利或估值指标")
     logic_ch = _chapter(text, "投资逻辑")
     outlook_ch = _chapter(text, "业务展望")
     if _cjk_len(logic_ch) < 400:
@@ -158,12 +179,20 @@ def validate_dossier(markdown: str, snapshot: dict, notes: dict | None = None) -
 
 def validate_cover_against(markdown: str, notes: dict) -> list[str]:
     errors: list[str] = []
-    text = markdown or ""
+    sections = {
+        "thesis": _chapter(markdown, "投资逻辑") + _chapter(markdown, "估值与评级"),
+        "outlook": _chapter(markdown, "业务展望") + _chapter(markdown, "盈利预测"),
+        "risks": _chapter(markdown, "主要风险"),
+    }
     for key in POINT_KEYS:
         for item in notes.get(key) or []:
             body = point_text(item)
-            if body and not _cover_in_text(body, text):
-                errors.append(f"封面 {key} 无法在底稿中找到对应句")
+            if len(point_title(item)) > 16:
+                errors.append(f"封面 {key} 标题超过16字")
+            if _cjk_len(body) > 180:
+                errors.append(f"封面 {key} 正文过长")
+            if body and not _cover_in_text(body, sections[key]):
+                errors.append(f"封面 {key} 无法在对应底稿章节中找到依据")
     return errors
 
 
@@ -253,36 +282,19 @@ def _chapter(markdown: str, title: str) -> str:
     return match.group(1) if match else ""
 
 
+def _subsection(markdown: str, title: str) -> str:
+    pattern = rf"(?m)^###\s*{re.escape(title)}\s*\n(.*?)(?=^###\s|\Z)"
+    match = re.search(pattern, markdown or "", flags=re.S | re.M)
+    return match.group(1) if match else ""
+
+
 def _cover_in_text(value: str, markdown: str) -> bool:
-    compact_md = _compact(markdown)
     compact_val = _compact(value)
-    if not compact_val:
-        return False
-    if compact_val in compact_md:
-        return True
-    for sentence in re.split(r"[。！？\n；;]", value):
-        piece = _compact(sentence)
-        if len(piece) >= 8 and piece in compact_md:
-            return True
-    if len(compact_val) >= 12 and compact_val[:12] in compact_md:
-        return True
-    hits = 0
-    width = 10
-    if len(compact_val) >= width:
-        for i in range(0, len(compact_val) - width + 1, 3):
-            if compact_val[i : i + width] in compact_md:
-                hits += 1
-        if hits >= 3:
-            return True
-    nums = re.findall(r"\d+(?:\.\d+)?", value)
-    distinctive = [n for n in nums if len(n) >= 3]
-    if distinctive and all(n in markdown.replace(",", "") for n in distinctive[:4]):
-        return True
-    return False
+    return bool(compact_val and compact_val in _compact(markdown))
 
 
 def _compact(text: str) -> str:
-    return re.sub(r"\s+", "", text or "")
+    return re.sub(r"[\s*_`]+", "", text or "")
 
 
 def _cjk_len(text: str) -> int:

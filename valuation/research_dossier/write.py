@@ -19,7 +19,7 @@ def main() -> int:
         ticker=str(facts.get("ticker") or ""),
         snapshot=snapshot,
         spec=spec,
-        pack_text=format_pack(snapshot, spec),
+        pack_text=format_pack(snapshot, spec, run_dir),
         run_dir=run_dir,
     )
     markdown, notes = compile_dossier(deps)
