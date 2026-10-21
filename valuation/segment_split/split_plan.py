@@ -2,16 +2,27 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from valuation.segment_split.schema import SchemaError
 
 PLAN_CALIBERS = frozenset({"official", "drilled"})
 RESIDUAL_NAMES = frozenset({"其他", "其他业务", "其他主营业务", "其他主营"})
+_BARE_RESIDUALS = RESIDUAL_NAMES | frozenset({"其余", "其余部分", "其他部分"})
+_RESIDUAL_TAILS = ("其他部分", "其余部分", "其他业务", "其余", "其他")
 
 
 def parent_residual_name(parent: str) -> str:
     return f"{str(parent or '').strip()}其他"
+
+
+def _matches_parent_residual(name: str, parent: str) -> bool:
+    text = str(name or "").strip()
+    host = str(parent or "").strip()
+    if not text or not host or not text.startswith(host):
+        return False
+    return text[len(host):].strip() in _RESIDUAL_TAILS
 
 
 def is_residual_name(
@@ -23,14 +34,14 @@ def is_residual_name(
     text = str(name or "").strip()
     if not text:
         return False
-    if text in RESIDUAL_NAMES:
+    if text in _BARE_RESIDUALS:
         return True
     host = str(parent or "").strip()
-    if host and text == parent_residual_name(host):
+    if host and _matches_parent_residual(text, host):
         return True
     for official in official_parents or ():
         official = str(official or "").strip()
-        if official and text == parent_residual_name(official):
+        if official and _matches_parent_residual(text, official):
             return True
     return False
 
@@ -39,14 +50,30 @@ def _rename_residual_row(name: str, parent: str, official_parents: list[str]) ->
     text = str(name or "").strip()
     host = str(parent or "").strip()
     parents = [str(item).strip() for item in official_parents if str(item).strip()]
-    if host and host in parents and (text in RESIDUAL_NAMES or text == parent_residual_name(host)):
+    if host and host in parents and (text in _BARE_RESIDUALS or _matches_parent_residual(text, host)):
         return parent_residual_name(host), host
     if text in RESIDUAL_NAMES:
         return text, ""
+    if text in _BARE_RESIDUALS:
+        return "其他", ""
     for official in parents:
-        if text == parent_residual_name(official):
-            return text, official
+        if _matches_parent_residual(text, official):
+            return parent_residual_name(official), official
     return text, host
+
+
+def money(value: float | Decimal) -> Decimal:
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
+
+def money_sum(values: list[float]) -> Decimal:
+    return sum((money(value) for value in values), Decimal(0))
+
+
+def same_money(left: float | Decimal, right: float | Decimal) -> bool:
+    return money(left) == money(right)
 
 
 def has_company_residual(
@@ -62,6 +89,106 @@ def has_company_residual(
         if is_residual_name(name, parent="", official_parents=parents):
             return True
     return False
+
+
+def plug_parent_residuals(
+    segments: list[dict[str, Any]],
+    periods: list[str],
+    official_rows: list[dict[str, Any]],
+    official_parents: list[str] | tuple[str, ...] | None = None,
+    *,
+    last_total: float = 0.0,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """具名子项不等于年报父项时，按精确差额补一行父口径其他。相等则不留这行。"""
+    years = [str(period) for period in periods]
+    parents = [str(item).strip() for item in (official_parents or []) if str(item).strip()]
+    plugs: dict[str, dict[str, Any]] = {}
+    drop_names: set[str] = set()
+    added: list[str] = []
+    for parent in parents:
+        members = [seg for seg in segments if str(seg.get("parent") or "").strip() == parent]
+        named = [
+            seg
+            for seg in members
+            if str(seg.get("name") or "").strip() != parent
+            and not is_residual_name(
+                str(seg.get("name") or ""),
+                parent=parent,
+                official_parents=parents,
+            )
+        ]
+        if not named:
+            continue
+        gaps: dict[str, float] = {}
+        uncovered = False
+        complete = True
+        for year in years:
+            official_amt = _official_row_amount(official_rows, year, parent)
+            revenues = [(seg.get("historical_revenue") or {}).get(year) for seg in named]
+            if official_amt is None or any(not isinstance(item, (int, float)) or isinstance(item, bool) for item in revenues):
+                complete = False
+                break
+            gap = money(official_amt) - money_sum([float(item) for item in revenues])
+            gaps[year] = float(gap)
+            if gap != 0:
+                uncovered = True
+        if not complete:
+            continue
+        for seg in members:
+            name = str(seg.get("name") or "").strip()
+            if name != parent and is_residual_name(name, parent=parent, official_parents=parents):
+                drop_names.add(name)
+        if not uncovered:
+            continue
+        name = parent_residual_name(parent)
+        drop_names.discard(name)
+        if not any(str(seg.get("name") or "").strip() == name for seg in members):
+            added.append(name)
+        last = years[-1]
+        amount = gaps.get(last)
+        plugs[parent] = {
+            "name": name,
+            "parent": parent,
+            "预测方法": "",
+            "historical_revenue": gaps,
+            "data_quality": {year: "倒推" for year in years},
+            "source_refs": list(named[0].get("source_refs") or []),
+            "revenue_share_latest": float(amount) / last_total if last_total and amount is not None else None,
+            "note": "[倒推]",
+        }
+    if not plugs and not drop_names:
+        return segments, []
+    kept = [seg for seg in segments if str(seg.get("name") or "").strip() not in drop_names]
+    if not plugs:
+        return kept, []
+    last_index = {
+        parent: max(i for i, seg in enumerate(kept) if str(seg.get("parent") or "").strip() == parent)
+        for parent in plugs
+    }
+    out: list[dict[str, Any]] = []
+    for i, seg in enumerate(kept):
+        out.append(seg)
+        for parent, row in plugs.items():
+            if last_index[parent] == i:
+                out.append(row)
+    return out, added
+
+
+def _official_row_amount(rows: list[dict[str, Any]], year: str, name: str) -> float | None:
+    year_key = str(year)[:4]
+    for row in rows:
+        if row.get("is_total"):
+            continue
+        period = str(row.get("period") or "")
+        if period != year and period[:4] != year_key:
+            continue
+        if str(row.get("name") or "").strip() != name:
+            continue
+        raw = row.get("revenue_yi")
+        if raw is None:
+            continue
+        return float(raw)
+    return None
 
 
 def _ensure_company_residual(
@@ -103,7 +230,8 @@ TRACE_GROUPS = (
 CALIBER_RULES = (
     "先照搬券商怎么拆，几家接近就合成一套；"
     "一家已按规格拆、另一家只写高速/中低速，跟更细的那套。"
-    "每条挂回一个年报父口径。下探了就留子项，未拆开的金额进该父口径其余部分；"
+    "每条挂回一个年报父口径。下探了就只留有名字的子项，不要预留父口径其他；"
+    "公司营业收入和父口径之间的差额进行「其他」。"
     "券商没拆就停在年报行。"
     "这一拍只锁名单。"
 )

@@ -109,7 +109,7 @@ def _dossier_instructions(ctx: RunContext[AnalystDeps]) -> str:
 
 小标题写主题，例如主线、云计算、拐点与斜率。买入/观察是结论，理由写业务和盈利。
 
-thesis、outlook、risks 是 Excel 总结页文字：条数按材料重要性确定，每条 {{title, text}}；title 不超过16字，text 为简短的完整句，带关键锁定数字。thesis 只从投资逻辑或估值与评级章节逐字取句，outlook 只从业务展望或盈利预测逐字取句，risks 只从主要风险逐字取句。投资逻辑优先覆盖利润驱动、与一致预期的实质差异和估值依据；未来展望优先覆盖近期兑现条件与中期利润路径；风险写具体触发条件及影响方向。底稿与 Excel 总结不能互相矛盾。不要在总结点里写“数据缺口”。
+thesis、outlook、risks 是 Excel 总结页文字：条数按材料重要性确定，每条 {{title, text}}；title 不超过16字，text 为简短的完整句，带关键锁定数字。投资逻辑优先覆盖利润驱动、与一致预期的实质差异和估值依据；未来展望优先覆盖近期兑现条件与中期利润路径；风险写具体触发条件及影响方向。不要在总结点里写“数据缺口”。
 
 文末单独引用块，且全文只出现一次：
 > {DISCLAIMER}
@@ -124,7 +124,7 @@ dossier_agent = Agent(
 )
 
 def compile_dossier(deps: AnalystDeps, *, model=None) -> tuple[str, dict]:
-    chat = model or build_chat_model(api="chat")
+    chat = model or build_chat_model()
     hint = ""
     last_errors: list[str] = []
     for attempt in range(1, 4):

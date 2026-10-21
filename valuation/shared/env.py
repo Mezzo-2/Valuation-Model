@@ -6,11 +6,12 @@ import os
 from pathlib import Path
 
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel
+from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.openai import OpenAIProvider
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASE_URL = "https://new-api.comein.cn/v1"
-DEFAULT_MODEL = "gpt-5.6-luna"
+DEFAULT_MODEL = "gpt-6-luna"
 _LOADED = False
 
 
@@ -71,17 +72,71 @@ def model_id() -> str:
 
 
 def _use_responses_api(name: str) -> bool:
+    del name
     forced = _env("VALUATION_LLM_API", "SPIKE_LLM_API").lower()
-    if forced in {"responses", "response"}:
-        return True
     if forced in {"chat", "completions"}:
         return False
-    lowered = name.lower()
-    return lowered.startswith("gpt-5") or "luna" in lowered
+    return True
+
+
+def _chat_tools_unavailable(name: str) -> bool:
+    """gpt-6.1-sol 的 chat completions 不能带工具：关推理会被拒，开着推理也不能调用工具。"""
+    return "sol" in name.lower()
+
+
+def _chat_profile(name: str) -> OpenAIModelProfile | None:
+    """Comein 上的 DeepSeek 不接受 tool_choice=required，也不接受点名强制某个工具。"""
+    if "deepseek" in name.lower():
+        return OpenAIModelProfile(
+            openai_supports_tool_choice_required=False,
+            openai_supports_strict_tool_definition=False,
+        )
+    return None
+
+
+class _ConfiguredChatModel(OpenAIChatModel):
+    """按模型补上推理强度。luna 不能带默认推理，DeepSeek Flash 用 max。"""
+
+    def __init__(
+        self,
+        model_name: str,
+        *,
+        provider: OpenAIProvider,
+        effort: str | None,
+        profile: OpenAIModelProfile | None = None,
+    ):
+        super().__init__(model_name, provider=provider, profile=profile)
+        self._effort = effort
+
+    async def request(self, messages, model_settings, model_request_parameters):
+        settings = dict(model_settings or {})
+        if self._effort:
+            settings.setdefault("openai_reasoning_effort", self._effort)
+        return await super().request(messages, settings, model_request_parameters)
+
+
+def _chat_tools_need_reasoning_off(name: str) -> bool:
+    return "luna" in name.lower()
+
+
+def reasoning_effort(name: str | None = None) -> str | None:
+    """DeepSeek Flash 的 max 是推理强度，不是另一个模型名。"""
+    load_env()
+    forced = _env("VALUATION_REASONING_EFFORT", "SPIKE_REASONING_EFFORT").lower()
+    if forced in {"none", "off"}:
+        return None
+    if forced:
+        return forced
+    model_name = (name or model_id()).lower()
+    if "luna" in model_name:
+        return "high"
+    if model_name in {"deepseek-flash", "deepseek-v4-flash"}:
+        return "max"
+    return None
 
 
 def build_chat_model(name: str | None = None, *, api: str | None = None):
-    """判断 Agent 共用：key + Comein /v1。gpt-5 / luna 默认 Responses；多轮工具用 api='chat'。"""
+    """判断 Agent 共用：key + Comein /v1。默认 Responses。"""
     import httpx2
 
     model_name = name or model_id()
@@ -94,19 +149,30 @@ def build_chat_model(name: str | None = None, *, api: str | None = None):
         api_key=api_key(),
         http_client=http_client,
     )
+    effort = reasoning_effort(model_name)
+    profile = _chat_profile(model_name)
+    settings = {"openai_reasoning_effort": effort} if effort else None
     forced = (api or "").strip().lower()
-    if forced in {"chat", "completions"}:
-        return OpenAIChatModel(model_name, provider=provider)
-    if forced in {"responses", "response"} or _use_responses_api(model_name):
-        return OpenAIResponsesModel(model_name, provider=provider)
-    return OpenAIChatModel(model_name, provider=provider)
+    use_chat = forced in {"chat", "completions"} or (
+        forced not in {"responses", "response"} and not _use_responses_api(model_name)
+    )
+    if use_chat and not _chat_tools_unavailable(model_name):
+        chat_effort = "none" if _chat_tools_need_reasoning_off(model_name) else effort
+        return _ConfiguredChatModel(model_name, provider=provider, effort=chat_effort, profile=profile)
+    return OpenAIResponsesModel(
+        model_name,
+        provider=provider,
+        profile=profile,
+        settings=settings,
+    )
 
 
 def describe() -> str:
     key = api_key()
     shown = f"{key[:6]}…{key[-4:]}" if len(key) > 12 else "(set)"
     kind = "responses" if _use_responses_api(model_id()) else "chat"
-    return f"model={model_id()}  api={kind}  base={base_url()}  key={shown}"
+    effort = reasoning_effort() or "-"
+    return f"model={model_id()}  api={kind}  reasoning={effort}  base={base_url()}  key={shown}"
 
 
 if __name__ == "__main__":

@@ -183,7 +183,7 @@ def run_live_cost(run_dir: Path) -> dict:
     log_root = logs_dir(run_dir) / "mcp"
     log_root.mkdir(parents=True, exist_ok=True)
     calls: list[dict[str, Any]] = []
-    chat = build_chat_model(api="chat")
+    chat = build_chat_model()
     with ComeinClient() as mcp:
         deps = CostDeps(
             company=str(facts.get("company") or ""),
@@ -209,7 +209,7 @@ def run_live_cost(run_dir: Path) -> dict:
 
 
 def compile_cost(deps: CostDeps, *, model=None) -> CostDraft:
-    chat = model or build_chat_model(api="chat")
+    chat = model or build_chat_model()
     hint = ""
     last_errors: list[str] = []
     for attempt in range(1, 4):

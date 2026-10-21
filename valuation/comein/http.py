@@ -33,7 +33,7 @@ class StreamableHttpSession:
 
     def start(self) -> dict[str, Any]:
         timeout = httpx.Timeout(self._connect_timeout, read=self._call_timeout)
-        self._client = httpx.Client(timeout=timeout, follow_redirects=True)
+        self._client = httpx.Client(timeout=timeout, follow_redirects=True, trust_env=False)
         result = self.rpc(
             "initialize",
             {

@@ -16,7 +16,12 @@ from valuation.segment_split.hist_agent import (
 )
 from valuation.segment_split.split_agent import SegmentPick, SplitAgentDeps, SplitPlan, _fill_plan
 from valuation.segment_split.schema import t_recon
-from valuation.segment_split.split_plan import is_residual_name, normalize_split_plan, validate_split_plan
+from valuation.segment_split.split_plan import (
+    is_residual_name,
+    normalize_split_plan,
+    plug_parent_residuals,
+    validate_split_plan,
+)
 from valuation.workbook.adapt import adapt_split
 from valuation.workbook.certify import formula_row_labels, hist_recon_errors
 from valuation.workbook.anchors import find_row_in_group
@@ -48,6 +53,144 @@ class ResidualNameTests(unittest.TestCase):
         for item in plan["segments"]:
             self.assertNotIn("method", item)
             self.assertNotIn("why_method", item)
+
+    def test_drilled_plan_does_not_reserve_parent_residual(self):
+        deps = SplitAgentDeps(
+            company="中芯国际",
+            ticker="688981",
+            forecast_years=["2026"],
+            official_names=["集成电路晶圆制造代工"],
+            official_rows=[],
+            search=lambda *_a, **_k: [],
+        )
+        plan = SplitPlan(
+            caliber="drilled",
+            official_parents=["集成电路晶圆制造代工"],
+            segments=[
+                SegmentPick(name="智能手机", parent="集成电路晶圆制造代工"),
+                SegmentPick(name="消费电子", parent="集成电路晶圆制造代工"),
+            ],
+        )
+        filled = _fill_plan(deps, plan)
+        names = [item.name for item in filled.segments]
+        self.assertEqual(names, ["智能手机", "消费电子", "其他"])
+
+    def test_plug_parent_residual_only_when_children_miss_parent(self):
+        rows = [{"period": "2025A", "name": "集成电路晶圆制造代工", "revenue_yi": 100.0}]
+        base = [
+            {
+                "name": "智能手机",
+                "parent": "集成电路晶圆制造代工",
+                "historical_revenue": {"2025A": 80.0},
+                "source_refs": ["S1"],
+            },
+            {"name": "其他", "parent": "", "historical_revenue": {"2025A": 10.0}, "source_refs": ["S1"]},
+        ]
+        plugged, added = plug_parent_residuals(
+            base, ["2025A"], rows, ["集成电路晶圆制造代工"], last_total=110.0
+        )
+        self.assertEqual(added, ["集成电路晶圆制造代工其他"])
+        self.assertEqual(
+            [item["name"] for item in plugged],
+            ["智能手机", "集成电路晶圆制造代工其他", "其他"],
+        )
+        self.assertEqual(plugged[1]["historical_revenue"]["2025A"], 20.0)
+        self.assertEqual(plugged[1]["data_quality"]["2025A"], "倒推")
+
+        full = [
+            {
+                "name": "智能手机",
+                "parent": "集成电路晶圆制造代工",
+                "historical_revenue": {"2025A": 100.0},
+            },
+            {"name": "其他", "parent": "", "historical_revenue": {"2025A": 10.0}},
+        ]
+        kept, added_none = plug_parent_residuals(
+            full, ["2025A"], rows, ["集成电路晶圆制造代工"], last_total=110.0
+        )
+        self.assertEqual(added_none, [])
+        self.assertEqual([item["name"] for item in kept], ["智能手机", "其他"])
+
+    def test_plug_ignores_old_tolerance_and_keeps_exact_gap(self):
+        rows = [{"period": "2025A", "name": "集成电路晶圆制造代工", "revenue_yi": 100.0}]
+        parents = ["集成电路晶圆制造代工"]
+        tiny = [
+            {
+                "name": "智能手机",
+                "parent": "集成电路晶圆制造代工",
+                "historical_revenue": {"2025A": 99.95},
+                "source_refs": ["S1"],
+            },
+            {"name": "其他", "parent": "", "historical_revenue": {"2025A": 10.0}},
+        ]
+        plugged, added = plug_parent_residuals(tiny, ["2025A"], rows, parents, last_total=110.0)
+        self.assertEqual(added, ["集成电路晶圆制造代工其他"])
+        self.assertEqual(plugged[1]["historical_revenue"]["2025A"], 0.05)
+
+        zero_row = [
+            {
+                "name": "智能手机",
+                "parent": "集成电路晶圆制造代工",
+                "historical_revenue": {"2025A": 100.0},
+            },
+            {
+                "name": "集成电路晶圆制造代工其他",
+                "parent": "集成电路晶圆制造代工",
+                "historical_revenue": {"2025A": 0.0},
+            },
+            {"name": "其他", "parent": "", "historical_revenue": {"2025A": 10.0}},
+        ]
+        kept, added_none = plug_parent_residuals(zero_row, ["2025A"], rows, parents, last_total=110.0)
+        self.assertEqual(added_none, [])
+        self.assertEqual([item["name"] for item in kept], ["智能手机", "其他"])
+
+    def test_parent_residual_alias_renames_to_canonical(self):
+        plan = normalize_split_plan(
+            {
+                "caliber": "drilled",
+                "official_parents": ["3C电子产品"],
+                "segments": [
+                    {"name": "云计算", "parent": "3C电子产品"},
+                    {"name": "通信及移动网络设备", "parent": "3C电子产品"},
+                    {"name": "3C电子产品其余部分", "parent": "3C电子产品"},
+                    {"name": "其他", "parent": ""},
+                ],
+            }
+        )
+        names = [item["name"] for item in plan["segments"]]
+        self.assertEqual(names.count("3C电子产品其他"), 1)
+        self.assertNotIn("3C电子产品其余部分", names)
+        self.assertEqual(validate_split_plan(plan), [])
+        self.assertTrue(
+            is_residual_name("3C电子产品其余部分", official_parents=["3C电子产品"])
+        )
+
+    def test_single_parent_keeps_company_residual_distinct(self):
+        deps = SplitAgentDeps(
+            company="工业富联",
+            ticker="601138",
+            forecast_years=["2026"],
+            official_names=["3C电子产品"],
+            official_rows=[],
+            search=lambda *_a, **_k: [],
+        )
+        plan = SplitPlan(
+            caliber="drilled",
+            official_parents=["3C电子产品"],
+            segments=[
+                SegmentPick(name="云计算", parent="3C电子产品"),
+                SegmentPick(name="通信及移动网络设备", parent="3C电子产品"),
+                SegmentPick(name="3C电子产品其他", parent="3C电子产品"),
+                SegmentPick(name="其他", parent=""),
+            ],
+        )
+        filled = _fill_plan(deps, plan)
+        names = [item.name for item in filled.segments]
+        self.assertEqual(len(names), len(set(names)))
+        other = next(item for item in filled.segments if item.name == "其他")
+        self.assertEqual(other.parent, "")
+        parent_other = next(item for item in filled.segments if item.name == "3C电子产品其他")
+        self.assertEqual(parent_other.parent, "3C电子产品")
 
     def test_official_plan_gets_company_residual(self):
         deps = SplitAgentDeps(
@@ -233,6 +376,34 @@ class HistFillContractTests(unittest.TestCase):
             ),
         )
         self.assertEqual(ok, [])
+
+    def test_missing_parent_plug_waits_for_later_row(self):
+        names = ["智能手机", "其他"]
+        segs = [
+            {"name": "智能手机", "parent": "集成电路晶圆制造代工"},
+            {"name": "其他", "parent": ""},
+        ]
+        deps = HistFillDeps(
+            company="中芯国际",
+            ticker="688981",
+            hist_periods=["2025A"],
+            forecast_years=["2026"],
+            revenue=[110.0],
+            plan_names=names,
+            plan_segments=segs,
+            official_names=["集成电路晶圆制造代工"],
+            official_rows=[
+                {"period": "2025A", "name": "集成电路晶圆制造代工", "revenue_yi": 100.0, "is_total": False},
+            ],
+            search=lambda *a, **k: [],
+        )
+        short = hist_errors(deps, _hist_draft({"智能手机": 80.0, "其他": 10.0}))
+        self.assertFalse(any("对不上" in item for item in short))
+        stuffed = hist_errors(deps, _hist_draft({"智能手机": 80.0, "其他": 30.0}))
+        self.assertTrue(any("未补的父项差额" in item for item in stuffed))
+        almost = hist_errors(deps, _hist_draft({"智能手机": 99.95, "其他": 10.05}))
+        self.assertTrue(any("对不上" in item for item in almost))
+        self.assertFalse(any("容差" in item for item in almost))
 
     def test_missing_company_residual_fails_before_fill(self):
         deps = HistFillDeps(

@@ -246,7 +246,7 @@ def _plan_instructions(ctx: RunContext[SplitAgentDeps]) -> str:
     return (
         f"你是{deps.label}的拆分收口。口径已确认，按查数结果决定停在年报还是留下更细行。这一拍只锁名单。\n"
         f"年报父口径：{official}。{rows or ''}\n"
-        f"已确认叶子：{leaves}。只能留下这些行，或把过细的并进该父口径其余部分。"
+        f"已确认叶子：{leaves}。只能留下这些具名叶子。不要预留父口径其他。"
     )
 
 
@@ -284,6 +284,8 @@ def _assign_parents(rows: list, official: list[str]) -> None:
     for item in rows:
         if item.parent:
             continue
+        if is_residual_name(item.name, parent="", official_parents=official):
+            continue
         if item.name in parent_set:
             item.parent = item.name
         elif len(official) == 1:
@@ -292,15 +294,6 @@ def _assign_parents(rows: list, official: list[str]) -> None:
 
 def _row_is_residual(item, official: list[str]) -> bool:
     return is_residual_name(item.name, parent=item.parent or "", official_parents=official)
-
-
-def _has_parent_residual(rows, parent: str, official: list[str]) -> bool:
-    for item in rows:
-        if (item.parent or "") != parent:
-            continue
-        if is_residual_name(item.name, parent=parent, official_parents=official):
-            return True
-    return False
 
 
 def _has_company_residual(rows, official: list[str]) -> bool:
@@ -349,8 +342,6 @@ def _fill_caliber(deps: SplitAgentDeps, output: CaliberDraft) -> CaliberDraft:
                 filled.append(CaliberRow(name=parent, parent=parent))
             continue
         drilled.add(parent)
-        if not _has_parent_residual(filled, parent, parents):
-            filled.append(CaliberRow(name=parent_residual_name(parent), parent=parent))
 
     kept: list[CaliberRow] = []
     for item in filled:
@@ -388,8 +379,6 @@ def _fill_plan(deps: SplitAgentDeps, output: SplitPlan) -> SplitPlan:
                 filled.append(SegmentPick(name=parent, parent=parent))
             continue
         drilled.add(parent)
-        if not _has_parent_residual(filled, parent, parents):
-            filled.append(SegmentPick(name=parent_residual_name(parent), parent=parent))
 
     kept: list[SegmentPick] = []
     for item in filled:
@@ -686,7 +675,7 @@ def _plan_user(deps: SplitAgentDeps, hint: str) -> str:
         found = line_traces(name, deps.hits)
         traces.append(f"{name}：{'、'.join(found) or '几乎没有可跟的数'}")
     text = (
-        "口径已确认。过细、几乎没有可跟的数的行并进该父口径其余部分。这一拍只锁名单。\n"
+        "口径已确认。过细、几乎没有可跟的数的行不要单列，也不要预留父口径其他。公司级差额留在「其他」。这一拍只锁名单。\n"
         f"年报父口径（回归用）：{'、'.join(deps.official_names) or '无'}\n"
         f"已确认口径：{'、'.join(item.name for item in (deps.draft.segments if deps.draft else [])) or '无'}\n"
     )

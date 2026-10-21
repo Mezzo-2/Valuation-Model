@@ -45,8 +45,8 @@ class SseSession:
     def start(self) -> dict[str, Any]:
         timeout = httpx.Timeout(self._connect_timeout, read=None)
         post_timeout = httpx.Timeout(self._connect_timeout, read=self._call_timeout)
-        self._stream_client = httpx.Client(timeout=timeout, follow_redirects=True)
-        self._post_client = httpx.Client(timeout=post_timeout, follow_redirects=True)
+        self._stream_client = httpx.Client(timeout=timeout, follow_redirects=True, trust_env=False)
+        self._post_client = httpx.Client(timeout=post_timeout, follow_redirects=True, trust_env=False)
         self._stream_cm = self._stream_client.stream(
             "GET",
             self._url,

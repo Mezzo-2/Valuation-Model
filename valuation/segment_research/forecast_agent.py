@@ -204,7 +204,7 @@ def write_method_to_notes(run_dir: Path, segment: str, method: str, why_method: 
 
 
 def compile_forecast(deps: ForecastDeps, *, model=None) -> ForecastDraft:
-    chat = model or build_chat_model(api="chat")
+    chat = model or build_chat_model()
     hint = ""
     last_errors: list[str] = []
     for attempt in range(1, 4):

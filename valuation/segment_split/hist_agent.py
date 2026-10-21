@@ -17,8 +17,12 @@ from valuation.comein.comein import ComeinClient
 from valuation.segment_split.split_plan import (
     has_company_residual,
     is_residual_name,
+    money,
+    money_sum,
     normalize_caliber,
     normalize_split_plan,
+    plug_parent_residuals,
+    same_money,
 )
 from valuation.segment_split.split_agent import SearchTurn, _compact_hits, _log, _log_messages
 from valuation.segment_split.schema import (
@@ -28,7 +32,6 @@ from valuation.segment_split.schema import (
     REVENUE_SCOPE,
     SchemaError,
     require_split,
-    t_recon,
 )
 from valuation.shared.env import build_chat_model
 from valuation.shared.io import dump_json, load_json, logs_dir, spec_dir
@@ -62,7 +65,9 @@ class SourceDocument(BaseModel):
 class HistFill(BaseModel):
     """历史拆分回填。名单已锁定，这里只拍金额。"""
 
-    fill_method: Literal["官方抄录", "卖方抄录", "残差倒推", "结构推算"]
+    fill_method: Literal["官方抄录", "卖方抄录", "残差倒推", "结构推算"] = Field(
+        description="历史填数方法，必填，只能是这四者之一：官方抄录、卖方抄录、残差倒推、结构推算"
+    )
     segments: list[HistSeg]
     split_logic: str
     hist_data_note: str = ""  # 兼容旧回填卡；结构变化由历史数确定
@@ -130,14 +135,6 @@ def _fill_instructions(ctx: RunContext[HistFillDeps]) -> str:
     totals = "；".join(
         f"{year} {REVENUE_SCOPE}={amount}" for year, amount in zip(deps.hist_periods, deps.revenue)
     )
-    residual = (
-        "、".join(
-            name
-            for name in deps.plan_names
-            if is_residual_name(name, official_parents=deps.official_names)
-        )
-        or "无"
-    )
     company_res = next(
         (
             name
@@ -148,16 +145,42 @@ def _fill_instructions(ctx: RunContext[HistFillDeps]) -> str:
         "",
     )
     company_slot = company_res or "公司级残差"
+    parent_plugs = [
+        name
+        for name in deps.plan_names
+        if any(
+            str(item.get("name") or "").strip() == name
+            and str(item.get("parent") or "").strip()
+            and is_residual_name(
+                name,
+                parent=str(item.get("parent") or ""),
+                official_parents=deps.official_names,
+            )
+            for item in deps.plan_segments
+        )
+    ]
+    if parent_plugs:
+        recon = (
+            f"每年分部加总必须对上该年{REVENUE_SCOPE}。"
+            f"该年年报有父项时，该父口径下各子项加已锁定的父口径其他必须对上该父项。"
+            f"未拆开的金额进{'、'.join(parent_plugs)}。\n"
+        )
+    else:
+        recon = (
+            "子项只填自己的收入。名单里没有父口径其他；父项没被子项盖住的差额不要写入任何已锁定分部，"
+            f"也不要为了轧平去改子项。回填后程序按年报父项减去子项合计补行。"
+            f"因此已锁定分部加总可以小于该年{REVENUE_SCOPE}，少掉的部分应等于这些父项缺口。\n"
+        )
     return (
         f"你是{deps.label}的历史拆分回填。名单已确认，只拍每个历史年的分部营业收入（亿元）。\n"
         f"分部必须恰好是：{names}。历史年必须恰好是：{years}。\n"
-        f"对账锚：{totals}。每年分部加总必须对上该年{REVENUE_SCOPE}。"
-        f"该年年报有父项时，该父口径下各子项加该父口径残差必须对上该父项。\n"
+        f"对账锚：{totals}。{recon}"
         f"年报行名会改，要判断是同一条、父口径合计，还是新行。"
         f"子项只填该叶子自己的收入；父项披露数原样抄进父项行。"
-        f"年报不再单列的叶子可以写 0，未拆开的金额进该父口径残差。\n"
+        f"年报不再单列的叶子可以写 0。\n"
         f"公司层差额（{REVENUE_SCOPE}减去各年报父项合计）只能写入「{company_slot}」。\n"
-        f"年报抄得到就抄；券商表能对上已锁定子项也可以用。缺的年可以按结构推算或把残差进「{residual}」。\n"
+        f"年报抄得到就抄；券商表能对上已锁定子项也可以用。缺的年可以按结构推算。\n"
+        "fill_method 必填，且只能是：官方抄录、卖方抄录、残差倒推、结构推算。\n"
         f"质量用：直接披露（年报原行）、有据可查（券商原表）、推算、倒推、兜底。why 逐格写取数依据，但不要重复套话。\n"
         "split_logic 具体解释采用哪些年报分部、为什么保留或下钻哪些业务，以及未单列业务的边界；不要抄逐年加总式。"
         "other_note 解释“其他”或父口径残差代表什么、哪些内容不能确定；不要重复逐年算式。"
@@ -177,7 +200,7 @@ search_agent = Agent(
 fill_agent = Agent(
     output_type=HistFill,
     deps_type=HistFillDeps,
-    retries=0,
+    retries=2,
     instructions=_fill_instructions,
 )
 
@@ -243,9 +266,40 @@ def run_live_hist_fill(run_dir: Path) -> dict:
         },
     )
     try:
-        return notes_from_draft(facts, plan, official, draft, hits=[*deps.prior_hits, *deps.hits])
+        notes = notes_from_draft(facts, plan, official, draft, hits=[*deps.prior_hits, *deps.hits])
     except SchemaError as exc:
         raise SystemExit("历史拆分回填未通过规范表:\n  " + "\n  ".join(exc.errors)) from exc
+    before = [str(item.get("name") or "") for item in plan.get("segments") or []]
+    after = [str(item.get("name") or "") for item in notes.get("final_segments") or []]
+    if before != after:
+        _align_locked_names(run_dir, notes.get("final_segments") or [])
+        removed = [name for name in before if name not in after]
+        added = [name for name in after if name not in before]
+        if removed:
+            print(f"historical_fill: 父项已顶满，去掉 {'、'.join(removed)}", flush=True)
+        if added:
+            print(f"historical_fill: 子项未盖住父项，补上 {'、'.join(added)}", flush=True)
+    return notes
+
+
+def _align_locked_names(run_dir: Path, segments: list[dict[str, Any]]) -> None:
+    """历史回填增删父口径其他后，拆分名单跟着收口。"""
+    rows = [
+        {
+            "name": str(item.get("name") or "").strip(),
+            "parent": str(item.get("parent") or "").strip(),
+        }
+        for item in segments
+        if str(item.get("name") or "").strip()
+    ]
+    root = spec_dir(run_dir)
+    for filename in ("split_plan.json", "split_caliber.json"):
+        path = root / filename
+        if not path.is_file():
+            continue
+        data = load_json(path)
+        data["segments"] = rows
+        dump_json(path, data)
 
 
 def run_hist_fill(deps: HistFillDeps, *, model=None) -> HistFill:
@@ -348,6 +402,15 @@ def notes_from_draft(
                 "note": tag,
             }
         )
+    official_parents = [str(name).strip() for name in (plan.get("official_parents") or []) if str(name).strip()]
+    before_names = [str(item.get("name") or "") for item in final_segments]
+    final_segments, added = plug_parent_residuals(
+        final_segments,
+        hist,
+        list(official.get("rows") or []),
+        official_parents,
+        last_total=last_total,
+    )
     fill_method = draft.fill_method if draft.fill_method in FILL_METHODS else "残差倒推"
     if plan.get("caliber") == "official" and fill_method == "官方抄录":
         caliber = "official"
@@ -364,7 +427,7 @@ def notes_from_draft(
         "revenue_scope": REVENUE_SCOPE,
         "split_caliber": caliber,
         "fill_method": fill_method,
-        "official_parents": [str(name).strip() for name in (plan.get("official_parents") or []) if str(name).strip()],
+        "official_parents": official_parents,
         "final_segments": final_segments,
         "split_explanation": {
             "拆分逻辑": draft.split_logic,
@@ -375,6 +438,23 @@ def notes_from_draft(
         "final_rationale": draft.final_rationale,
         "sources": sources,
     }
+    after_names = {str(item.get("name") or "") for item in final_segments}
+    removed = [name for name in before_names if name not in after_names]
+    clauses: list[str] = []
+    if removed:
+        clauses.append(f"{'、'.join(removed)}各历史年与父项差额为 0，已从名单删除。")
+    if added:
+        clauses.append(f"子项加总与年报父项不一致，已按精确差额补上{'、'.join(added)}。")
+    if clauses:
+        logic = str(notes["split_explanation"]["拆分逻辑"] or "").rstrip("。")
+        notes["split_explanation"]["拆分逻辑"] = f"{logic}。{''.join(clauses)}" if logic else "".join(clauses)
+        for source in sources:
+            identified = source.get("segments_identified")
+            if isinstance(identified, list):
+                source["segments_identified"] = [item for item in identified if item not in removed]
+                for name in added:
+                    if name not in source["segments_identified"]:
+                        source["segments_identified"].append(name)
     for key in EXPLAIN_KEYS:
         if not str(notes["split_explanation"].get(key) or "").strip():
             notes["split_explanation"][key] = "见历史数据及来源清单。"
@@ -393,17 +473,18 @@ def plan_slot_errors(deps: HistFillDeps) -> list[str]:
     errors: list[str] = []
     for i, year in enumerate(deps.hist_periods):
         reported = float(deps.revenue[i])
-        official_sum = 0.0
+        parts: list[float] = []
         missing = False
         for parent in official:
             amount = _official_amount(deps, year, parent)
             if amount is None:
                 missing = True
                 break
-            official_sum += amount
+            parts.append(amount)
         if missing:
             continue
-        if abs(official_sum - reported) > t_recon(reported):
+        official_sum = money_sum(parts)
+        if not same_money(official_sum, reported):
             errors.append(
                 f"{year} 年报父项合计 {official_sum} 对不上 {REVENUE_SCOPE} {reported}，名单缺公司级残差"
             )
@@ -443,9 +524,11 @@ def hist_errors(deps: HistFillDeps, draft: HistFill) -> list[str]:
             amounts[name] = amount
             qualities[name] = cell.quality
             total += amount
-        if abs(total - reported) > t_recon(reported):
+        gap = _unplugged_parent_gap(deps, year, amounts, parent_of, official)
+        if money_sum(list(amounts.values())) + gap != money(reported):
+            detail = f"加上未补的父项差额 {gap} " if gap != 0 else ""
             errors.append(
-                f"{year} 分部加总 {total} 对不上 {REVENUE_SCOPE} {reported}（容差 {t_recon(reported)}）"
+                f"{year} 分部加总 {total} {detail}对不上 {REVENUE_SCOPE} {reported}"
             )
         errors.extend(_parent_year_errors(deps, year, amounts, qualities, parent_of, official))
     if draft.fill_method not in FILL_METHODS:
@@ -462,6 +545,31 @@ def hist_errors(deps: HistFillDeps, draft: HistFill) -> list[str]:
     )) and not draft.source_documents:
         errors.append("细分口径或券商取数须列至少一份实际使用的检索文件")
     return errors
+
+
+def _unplugged_parent_gap(
+    deps: HistFillDeps,
+    year: str,
+    amounts: dict[str, float],
+    parent_of: dict[str, str],
+    official: list[str],
+) -> Decimal:
+    """名单还没有父口径其他时，父项披露数减去具名子项，留待回填后补行。"""
+    from decimal import Decimal
+
+    gap = Decimal(0)
+    for parent in official:
+        members = [name for name in deps.plan_names if parent_of.get(name) == parent and name != parent]
+        if not members:
+            continue
+        if any(is_residual_name(name, parent=parent, official_parents=official) for name in members):
+            continue
+        official_amt = _official_amount(deps, year, parent)
+        if official_amt is None:
+            continue
+        named = [amounts[name] for name in members if name in amounts]
+        gap += money(official_amt) - money_sum(named)
+    return gap
 
 
 def _official_amount(deps: HistFillDeps, year: str, name: str) -> float | None:
@@ -513,11 +621,14 @@ def _parent_year_errors(
         official_amt = _official_amount(deps, year, parent)
         if official_amt is None:
             continue
-        child_sum = sum(amounts.get(name, 0.0) for name in members)
-        if abs(child_sum - official_amt) > t_recon(official_amt):
+        present = [amounts[name] for name in members if name in amounts]
+        has_plug = any(
+            name != parent and is_residual_name(name, parent=parent, official_parents=official)
+            for name in members
+        )
+        if has_plug and not same_money(money_sum(present), official_amt):
             errors.append(
-                f"{year} {parent} 子项加总 {child_sum} 对不上年报父项 {official_amt}"
-                f"（容差 {t_recon(official_amt)}）"
+                f"{year} {parent} 子项加总 {money_sum(present)} 对不上年报父项 {official_amt}"
             )
         for name in members:
             if name == parent:
@@ -527,7 +638,7 @@ def _parent_year_errors(
             amount = amounts.get(name)
             if amount is None:
                 continue
-            if abs(amount - official_amt) <= t_recon(official_amt):
+            if same_money(amount, official_amt):
                 errors.append(f"{year} 不要把父口径 {parent} 总数填进子项 {name}")
             if abs(amount) <= 1e-12 and name not in disclosed and qualities.get(name) == "直接披露":
                 errors.append(f"{year} {name} 年报未单列，0 不能标直接披露")

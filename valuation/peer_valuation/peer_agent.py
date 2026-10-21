@@ -188,7 +188,7 @@ def run_live_peers(run_dir: Path) -> tuple[dict, dict]:
     log_root = logs_dir(run_dir) / "mcp"
     log_root.mkdir(parents=True, exist_ok=True)
     calls: list[dict[str, Any]] = []
-    chat = build_chat_model(api="chat")
+    chat = build_chat_model()
     with ComeinClient() as mcp:
         cons = fetch_subject_consensus(mcp, facts, log_root, calls)
         dump_json(spec_dir(run_dir) / "consensus_estimates.json", cons)

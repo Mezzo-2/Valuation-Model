@@ -276,7 +276,7 @@ def run_live_brief(run_dir: Path, segment: str, *, reuse_search: bool = False) -
     log_root.mkdir(parents=True, exist_ok=True)
     calls: list[dict[str, Any]] = []
     start = _start_from_hist(hist)
-    chat = build_chat_model(api="chat")
+    chat = build_chat_model()
     hits_path = log_root / f"research_hits_{segment}.json"
     with ComeinClient() as mcp:
         deps = BriefDeps(
@@ -304,7 +304,7 @@ def run_live_brief(run_dir: Path, segment: str, *, reuse_search: bool = False) -
 
 
 def run_brief(deps: BriefDeps, *, model=None) -> ResearchBrief:
-    chat = model or build_chat_model(api="chat")
+    chat = model or build_chat_model()
     _log(deps, f"[brief] 研究 {deps.segment}")
     result = brief_agent.run_sync(_brief_user(deps), deps=deps, model=chat)
     _log_messages(deps, result.all_messages())

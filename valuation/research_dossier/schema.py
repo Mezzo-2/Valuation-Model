@@ -178,21 +178,15 @@ def validate_dossier(markdown: str, snapshot: dict, notes: dict | None = None) -
 
 
 def validate_cover_against(markdown: str, notes: dict) -> list[str]:
+    """封面只检查能不能放进 Excel。不要求句子从底稿章节逐字抄出。"""
+    del markdown
     errors: list[str] = []
-    sections = {
-        "thesis": _chapter(markdown, "投资逻辑") + _chapter(markdown, "估值与评级"),
-        "outlook": _chapter(markdown, "业务展望") + _chapter(markdown, "盈利预测"),
-        "risks": _chapter(markdown, "主要风险"),
-    }
     for key in POINT_KEYS:
         for item in notes.get(key) or []:
-            body = point_text(item)
             if len(point_title(item)) > 16:
                 errors.append(f"封面 {key} 标题超过16字")
-            if _cjk_len(body) > 180:
+            if _cjk_len(point_text(item)) > 180:
                 errors.append(f"封面 {key} 正文过长")
-            if body and not _cover_in_text(body, sections[key]):
-                errors.append(f"封面 {key} 无法在对应底稿章节中找到依据")
     return errors
 
 
@@ -286,15 +280,6 @@ def _subsection(markdown: str, title: str) -> str:
     pattern = rf"(?m)^###\s*{re.escape(title)}\s*\n(.*?)(?=^###\s|\Z)"
     match = re.search(pattern, markdown or "", flags=re.S | re.M)
     return match.group(1) if match else ""
-
-
-def _cover_in_text(value: str, markdown: str) -> bool:
-    compact_val = _compact(value)
-    return bool(compact_val and compact_val in _compact(markdown))
-
-
-def _compact(text: str) -> str:
-    return re.sub(r"[\s*_`]+", "", text or "")
 
 
 def _cjk_len(text: str) -> int:

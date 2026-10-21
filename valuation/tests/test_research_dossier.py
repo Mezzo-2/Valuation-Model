@@ -102,7 +102,7 @@ class ResearchDossierTests(unittest.TestCase):
         self.assertEqual(validate_dossier(markdown, snapshot, notes), [])
 
         notes["outlook"][0]["text"] = THESIS
-        self.assertIn("对应底稿章节", "；".join(validate_dossier(markdown, snapshot, notes)))
+        self.assertEqual(validate_dossier(markdown, snapshot, notes), [])
 
     def test_dossier_and_summary_are_generated_in_one_model_call(self):
         draft = _draft()
