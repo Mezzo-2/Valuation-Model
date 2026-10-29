@@ -16,6 +16,7 @@ from valuation.shared.houses import (
 )
 from valuation.shared.io import dump_json, load_json, logs_dir, spec_dir
 from valuation.workbook.load_json import load_spec
+from valuation.shared.markets import is_foreign, foreign_pnl, valuation_factor, validate_pe_basis
 
 GAP_CUTOFF = 0.15
 RATING_CUTOFF = 0.15
@@ -89,6 +90,12 @@ def snapshot_from_spec(spec: dict, *, run_dir: Path | None = None) -> dict[str, 
         "sources": _collect_sources(spec, run_dir),
     }
     snap["bibliography"] = _bibliography(snap, run_dir=run_dir)
+    if is_foreign(facts):
+        snap.update(currency=facts.get("currency"), trading_currency=facts.get("trading_currency"),
+                    amount_unit=facts.get("unit"), eps_unit=facts.get("eps_unit"), eps_scope=facts.get("eps_scope"))
+        if facts.get("valuation_fx"):
+            snap["valuation_fx"] = facts["valuation_fx"]
+            snap["ordinary_per_quote"] = (facts.get("market") or {}).get("每交易单位普通股数")
     return snap
 
 
@@ -150,6 +157,8 @@ def _pnl_roll(
     hist: list[str],
     fcst: list[str],
 ) -> dict[str, dict[str, float | None]]:
+    if is_foreign(facts):
+        return foreign_pnl(facts, cost, revenue)
     income = facts.get("income") or {}
     shares = float((facts.get("market") or {})["当前总股本_百万股"])
     out: dict[str, dict[str, float | None]] = {}
@@ -246,16 +255,18 @@ def _pnl_roll(
 
 
 def _valuation_block(facts: dict, comps: dict, eps_y1: float, y1: str) -> dict[str, Any]:
+    validate_pe_basis(facts, comps)
     core = list(comps.get("core") or [])
     pes = [float(item["pe_y1"]) for item in core]
     pe_mean = sum(pes) / len(pes)
     pe_adjust = float(comps.get("pe_adjust") if comps.get("pe_adjust") is not None else 1.0)
     target_pe = pe_mean * pe_adjust
-    target_price = target_pe * float(eps_y1)
+    factor = valuation_factor(facts)
+    target_price = target_pe * float(eps_y1) * factor
     price = float((facts.get("market") or {})["当前股价"])
     upside = target_price / price - 1
     rating = "买入" if upside >= RATING_CUTOFF else "观察"
-    return {
+    result = {
         "y1": y1,
         "core": [
             {
@@ -279,8 +290,11 @@ def _valuation_block(facts: dict, comps: dict, eps_y1: float, y1: str) -> dict[s
         "rating": rating,
         "pe_adjust_is_one": abs(pe_adjust - 1.0) < 1e-9,
         "target_horizon": "当前合理价格",
-        "implied_eps": price / target_pe if target_pe else None,
+        "implied_eps": price / target_pe / factor if target_pe else None,
     }
+    if is_foreign(facts):
+        result.update(pe_basis=f"{y1} PE")
+    return result
 
 
 def _consensus_block(
@@ -295,6 +309,12 @@ def _consensus_block(
     for year in fcst:
         rev_cons = _consensus_metric(canonical, year, "revenue")
         eps_cons = _consensus_metric(canonical, year, "eps")
+        if is_foreign(spec["facts"]):
+            facts = spec["facts"]
+            if canonical.get("eps_scope") != facts.get("eps_scope") or canonical.get("eps_unit") != facts.get("eps_unit"):
+                eps_cons = None
+            if canonical.get("revenue_unit") != facts.get("unit"):
+                rev_cons = None
         rev_gap = None if not rev_cons else revenue[year] / rev_cons - 1
         eps_gap = None if not eps_cons else eps[year] / eps_cons - 1
         out[year] = {

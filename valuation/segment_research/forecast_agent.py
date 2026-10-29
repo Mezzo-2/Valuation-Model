@@ -139,6 +139,7 @@ def _forecast_instructions(ctx: RunContext[ForecastDeps]) -> str:
         )
     return (
         f"你是{deps.label}的分析师。笔记是材料，用锁定分部收入对账。\n"
+        f"锁定收入的金额单位为{deps.facts.get('unit') or '亿元'}，量价单位及转换须与该金额币种对应。\n"
         f"{pick}\n"
         "historical_data 只写历史年；预测数字由你根据材料独立判断。\n"
         f"{_analyst_guidance()}"

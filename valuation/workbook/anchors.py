@@ -74,6 +74,7 @@ def find_label_position(
     exact: bool = True,
 ) -> tuple[int, int]:
     """返回 (row, label_col)。历史财务数据会扫 A 列和 F 列。"""
+    label = getattr(ws, "_subject_labels", {}).get(label, label)
     target = _normalize_text(label)
     scan_min = min_row
     scan_max = ws.max_row if max_row is None else max_row

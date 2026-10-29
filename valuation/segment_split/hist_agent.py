@@ -44,7 +44,7 @@ _FORECAST_HINT = re.compile(r"展望|盈利预测|利润表|损益表|我们预�
 
 class HistCell(BaseModel):
     year: str = Field(description="历史年，须与 facts 的 2023A 这种键一致")
-    amount: float = Field(description="该年该分部营业收入，亿元")
+    amount: float = Field(description="该年该分部营业收入，采用事实文件的币种和金额单位")
     quality: Literal["直接披露", "有据可查", "推算", "倒推", "兜底"] = Field(
         description="格子质量。年报原行用直接披露；券商原表有对应数字用有据可查"
     )
@@ -93,6 +93,7 @@ class HistFillDeps:
     max_searches: int = MAX_HIST_SEARCHES
     verbose: bool = True
     stage: str = "hist"
+    amount_unit: str = "亿元"
     hits: list[dict[str, Any]] = field(default_factory=list)
     prior_hits: list[dict[str, Any]] = field(default_factory=list)
     queries: list[dict[str, Any]] = field(default_factory=list)
@@ -172,7 +173,8 @@ def _fill_instructions(ctx: RunContext[HistFillDeps]) -> str:
             f"因此已锁定分部加总可以小于该年{REVENUE_SCOPE}，少掉的部分应等于这些父项缺口。\n"
         )
     return (
-        f"你是{deps.label}的历史拆分回填。名单已确认，只拍每个历史年的分部营业收入（亿元）。\n"
+        f"你是{deps.label}的历史拆分回填。名单已确认，只拍每个历史年的分部营业收入（{deps.amount_unit}）。\n"
+        "来源币种不同时须依据明确汇率转换，不能直接混用金额；无法核实转换时写明缺口。\n"
         f"分部必须恰好是：{names}。历史年必须恰好是：{years}。\n"
         f"对账锚：{totals}。{recon}"
         f"年报行名会改，要判断是同一条、父口径合计，还是新行。"
@@ -238,6 +240,7 @@ def run_live_hist_fill(run_dir: Path) -> dict:
     with ComeinClient() as mcp:
         deps = HistFillDeps(
             company=str(facts.get("company") or plan.get("company") or ""),
+            amount_unit=facts.get("unit") or "亿元",
             ticker=str(facts.get("ticker") or plan.get("ticker") or ""),
             hist_periods=hist,
             forecast_years=fcst,
@@ -762,7 +765,7 @@ def _fill_user(deps: HistFillDeps, hint: str) -> str:
         f"{year}={amount}" for year, amount in zip(deps.hist_periods, deps.revenue)
     )
     text = (
-        "检索结束。按已锁定名单拍出每个历史年的分部收入（亿元）。\n"
+        f"检索结束。按已锁定名单拍出每个历史年的分部收入（{deps.amount_unit}）。\n"
         f"分部：{'、'.join(deps.plan_names)}\n"
         f"历史年：{'、'.join(deps.hist_periods)}\n"
         f"{REVENUE_SCOPE}对账：{totals}\n"

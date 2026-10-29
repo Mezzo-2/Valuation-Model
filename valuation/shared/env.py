@@ -142,7 +142,7 @@ def build_chat_model(name: str | None = None, *, api: str | None = None):
     model_name = name or model_id()
     http_client = httpx2.AsyncClient(
         trust_env=False,
-        timeout=httpx2.Timeout(120.0, connect=20.0),
+        timeout=httpx2.Timeout(600.0, connect=20.0),
     )
     provider = OpenAIProvider(
         base_url=base_url(),

@@ -23,6 +23,7 @@ from valuation.workbook.anchors import (
 from valuation.workbook.build import consensus_median_formula
 from valuation.workbook.build import SHEET_ORDER
 from valuation.workbook.load_json import load_spec
+from valuation.shared.markets import is_foreign, register_labels
 from valuation.workbook.tree import (
     build_split_groups,
     revenue_group_titles,
@@ -51,6 +52,7 @@ def formula_row_labels(ws: Worksheet, formula: str) -> list[str]:
 def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
     spec = load_spec(run_dir)
     wb = load_workbook(workbook_path, data_only=False)
+    register_labels(wb, spec["facts"])
     calc_fails: list[str] = []
     format_fails: list[str] = []
     fails = calc_fails
@@ -205,6 +207,11 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
         "研发费用率",
         "有效税率",
     )
+    if is_foreign(spec["facts"]):
+        from valuation.workbook.market_config import assumption_rows, operating_margin_name
+        matrix_labels = ("营业收入", "毛利", "营业利润", "归母净利润", "EPS",
+                         "营业收入同比增速", operating_margin_name(spec["facts"]),
+                         *(name for _, name, _, _ in assumption_rows(spec["facts"], spec["cost"])))
     for label in matrix_labels:
         try:
             cell = _summary_adjacent_value(sm, label).value
@@ -232,10 +239,30 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
     if "不构成投资建议" not in last_text:
         format_fails.append("总结最后一行不是免责声明")
 
+    for left, right in (("估值概览", "当前行情"), ("财务预测", "关键经营假设"), ("投资逻辑", "未来展望")):
+        try:
+            lr, lc = find_label_position(sm, left)
+            rr, rc = find_label_position(sm, right)
+            if lr != rr or (lc, rc) != (1, 7):
+                format_fails.append(f"总结!{left}/{right} 未使用公共左右分栏")
+        except ValueError as exc:
+            format_fails.append(str(exc))
+    for name, labels in (("运营成本预测", ("成本毛利区", "费用区", "总费用")),
+                         ("利润表预测", ("营业收入同比", "营业成本", "合并毛利率", "归母净利润同比"))):
+        sheet = wb[name]
+        if sheet.cell(2, 8).value != "备注":
+            format_fails.append(f"{name} 未使用公共历史/预测/备注列布局")
+        for label in labels:
+            try:
+                find_row_by_label(sheet, label)
+            except ValueError as exc:
+                format_fails.append(str(exc))
+
     fs = wb["历史财务数据"]
-    if fs.cell(row=2, column=1).value != "利润表（亿元）":
+    unit = spec["facts"].get("unit") if is_foreign(spec["facts"]) else "亿元"
+    if fs.cell(row=2, column=1).value != f"利润表（{unit}）":
         format_fails.append(f"历史财务数据!A2={fs.cell(row=2, column=1).value}")
-    if fs.cell(row=2, column=6).value != "资产负债表（亿元）":
+    if fs.cell(row=2, column=6).value != f"资产负债表（{unit}）":
         format_fails.append(f"历史财务数据!F2={fs.cell(row=2, column=6).value}")
     if fs.max_column > 4 and any(
         str(fs.cell(row=2, column=c).value or "") == "备注" for c in range(1, fs.max_column + 1)
@@ -255,6 +282,7 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
         "format_fails": format_fails,
         "core_pe_mean": sum(pes) / len(pes) if pes else None,
         "workbook": str(workbook_path),
+        "data_warnings": spec["facts"].get("notes", {}).get("profit_checks", []),
     }
     return report
 
@@ -311,6 +339,7 @@ def _pnl_year_errors(wb, spec: dict) -> list[str]:
                 fails.append(f"利润表预测!{label} {year} 公式危险: {text}")
     try:
         eps_row = find_row_by_label(pnl, "EPS")
+        foreign = is_foreign(spec["facts"])
         ni_row = find_row_by_label(pnl, "归母净利润")
         col = find_col_by_header(pnl, y1)
         shares_row = find_row_by_label(wb["历史财务数据"], fs_label("当前总股本_百万股"))
@@ -322,6 +351,9 @@ def _pnl_year_errors(wb, spec: dict) -> list[str]:
                 CellAnchor("历史财务数据", shares_row, 2),
             ],
         )
+        if foreign and spec["facts"]["market"]["每交易单位普通股数"] != 1:
+            ratio_row = find_row_by_label(wb["历史财务数据"], "每交易单位普通股数")
+            verify_formula_anchors(pnl, pnl.cell(eps_row, col), [CellAnchor("历史财务数据", ratio_row, 2)])
     except ValueError as exc:
         fails.append(str(exc))
     return fails
@@ -371,10 +403,11 @@ def hist_recon_errors(facts: dict, segs: list[dict]) -> list[str]:
     fails: list[str] = []
     inc = facts["income"]
     for i, year in enumerate(facts["hist_periods"]):
-        pre = inc["税前利润"][i]
-        chk = inc["营业利润"][i] + inc["营业外收入"][i] - inc["营业外支出"][i]
-        if abs(pre - chk) > t_recon(float(pre)):
-            fails.append(f"{year} 税前利润勾稽失败 {pre} vs {chk}")
+        if not is_foreign(facts):
+            pre = inc["税前利润"][i]
+            chk = inc["营业利润"][i] + inc["营业外收入"][i] - inc["营业外支出"][i]
+            if abs(pre - chk) > t_recon(float(pre)):
+                fails.append(f"{year} 税前利润勾稽失败 {pre} vs {chk}")
         total = inc["营业收入"][i]
         summed = sum(float(seg["hist_revenue"][i]) for seg in segs)
         if abs(summed - float(total)) > t_recon(float(total)):

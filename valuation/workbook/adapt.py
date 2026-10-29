@@ -73,7 +73,11 @@ def adapt_consensus(canonical: dict, facts: dict) -> dict[str, Any]:
                     ],
                 }
             )
-    return {
+    from valuation.shared.markets import is_foreign
+    if is_foreign(facts) and canonical.get("revenue_unit") != facts.get("unit"):
+        for house in houses:
+            house["revenue"] = [None for _ in fcst]
+    result = {
         "company": canonical.get("company"),
         "ticker": canonical.get("ticker"),
         "forecast_periods": fcst,
@@ -82,3 +86,24 @@ def adapt_consensus(canonical: dict, facts: dict) -> dict[str, Any]:
         "coverage": canonical.get("coverage_status"),
         "revenue_scope": canonical.get("revenue_scope"),
     }
+    revenue_gap = any("收入币种" in gap or "机构营收换算汇率" in gap
+                      for gap in canonical.get("open_gaps") or [])
+    converted = any((estimate.get("revenue_source") or {}).get("fx")
+                    for item in canonical.get("institution_estimates") or []
+                    for estimate in (item.get("estimates") or {}).values())
+    if is_foreign(facts) or converted or revenue_gap:
+        notes = [f"收入单位：{canonical.get('revenue_unit')}"]
+        if revenue_gap:
+            notes.append("部分机构营收因币种或汇率缺失未写入")
+        for item in canonical.get("institution_estimates") or []:
+            for year, estimate in (item.get("estimates") or {}).items():
+                source = estimate.get("revenue_source") or {}
+                fx = source.get("fx")
+                if fx:
+                    note = f"{fx['date']}：1 {fx['base']}={fx['rate']:.6f} {fx['quote']}（{fx['source']}）"
+                    if note not in notes:
+                        notes.append(note)
+                if source.get("report_date") and source["report_date"] != item.get("report_date"):
+                    notes.append(f"{short_house_name(item.get('institution'))} {year}采用{source['report_date']}报告")
+        result["revenue_note"] = "；".join(notes)
+    return result

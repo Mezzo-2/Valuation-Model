@@ -45,17 +45,20 @@ class CostDraft(BaseModel):
     gross_margin: dict[str, float] = Field(
         description='预测年合并毛利率，小数如 {"2026E": 0.08}'
     )
-    sales_ratio: dict[str, float] = Field(description="预测年销售费用率，小数")
-    admin_ratio: dict[str, float] = Field(description="预测年管理费用率，小数")
-    rd_ratio: dict[str, float] = Field(description="预测年研发费用率，小数")
-    tax_rate: dict[str, float] = Field(description="预测年有效税率，小数，0–1")
+    sales_ratio: dict[str, float] = Field(default_factory=dict, description="适用时填写预测年销售费用率，小数")
+    admin_ratio: dict[str, float] = Field(default_factory=dict, description="适用时填写预测年管理费用率，小数")
+    rd_ratio: dict[str, float] = Field(default_factory=dict, description="适用时填写预测年研发费用率，小数")
+    sga_ratio: dict[str, float] = Field(default_factory=dict, description="美股 SG&A 费用率，小数；与另列研发避免重复")
+    associates: dict[str, float] = Field(default_factory=dict, description="仅在实际适用时填写联营公司损益，利润为正、亏损为负，采用事实文件金额单位")
+    preferred_dividends: dict[str, float] = Field(default_factory=dict, description="仅在实际适用时填写优先股股息扣减，采用事实文件金额单位")
+    tax_rate: dict[str, float] = Field(description="预测年税费比率，小数；A股0–1，港美按有依据的税费假设，允许税收收益")
     minority: dict[str, float] = Field(
-        description="预测年少数股东比率，小数，-1–1。少数股东承担亏损时为负"
+        description="预测年少数股东损益占合并净利润比率，小数；可为负。A股-1–1，港美按实际利润归属解释"
     )
-    fin_exp: dict[str, float] = Field(description="预测年财务费用，亿元金额，可为负")
-    nonop_inc: dict[str, float] = Field(description="预测年营业外收入，亿元")
-    nonop_exp: dict[str, float] = Field(description="预测年营业外支出，亿元")
-    other_op: dict[str, float] = Field(description="预测年其他经营净收益，亿元，可为负")
+    fin_exp: dict[str, float] = Field(default_factory=dict, description="适用时填写预测财务费用，费用为正、净收益为负；金额采用事实文件单位，A股亿元")
+    nonop_inc: dict[str, float] = Field(default_factory=dict, description="适用时填写预测营业外收入，金额采用事实文件单位，A股亿元")
+    nonop_exp: dict[str, float] = Field(default_factory=dict, description="适用时填写预测营业外支出，金额采用事实文件单位，A股亿元")
+    other_op: dict[str, float] = Field(default_factory=dict, description="其他经营净收益，可为负，金额采用事实文件单位。A股必填；港美历史已由毛利减适用费用与营业利润的差额派生时，预测年须填写")
     rationale: str = Field(description="按理由模板三段写：历史轨迹、卖方假设、我们的数")
     open_gaps: list[str] = Field(default_factory=list)
     sources: list[dict[str, str]] = Field(default_factory=list)
@@ -121,6 +124,21 @@ def _rationale_template(years: list[str]) -> str:
 
 def _cost_instructions(ctx: RunContext[CostDeps]) -> str:
     deps = ctx.deps
+    from valuation.shared.markets import is_foreign
+    if is_foreign(deps.facts):
+        return (f"你是{deps.label}的分析师。按注入的港美科目和实际财年预测，金额单位为{deps.facts.get('unit')}。"
+                "历史原值不可改写。美股营业利润采用SOPR、基本EPS采用SBCOC扣非定义。"
+                "只填写本次适用字段。SG&A和研发、管理费用及其中研发避免重复扣减。"
+                "沿用A股推导：毛利-适用费用+其他经营净收益=营业利润；"
+                "营业利润-财务费用+营业外收入-营业外支出+适用联营公司损益=税前利润；"
+                "减税费=合并净利润；减少数股东损益=归母利润。"
+                "EPS默认用归母利润及财务快照股本计算，股本持平，不另填预测股数。"
+                "仅在确有优先股股息时填写扣减；不得为兼容模板填不适用的零科目。"
+                "历史已把毛利减适用费用后与营业利润的差额记入其他经营净收益时，预测年延续该金额，可为负。"
+                "不得把未确认的扣非范围或缺失费用改记到这个科目。"
+                "使用search_research寻找费用、税费和利润连接项目的依据。"
+                "材料不足写open_gaps，不能隐藏改成净利率或独立EPS预测。"
+                "rationale写历史轨迹、卖方假设、我们的预测，说明实际收支及税费的来源、符号和单位。")
     return (
         f"你是{deps.label}的分析师，拍公司合并成本费用：每年一个合并毛利率。\n"
         f"历史轨迹按注入数引用。还可检索 {deps.searches_left} 次。\n"
@@ -139,14 +157,20 @@ cost_agent = Agent(
 )
 
 
-@cost_agent.tool
+@cost_agent.tool(retries=2)
 def search_research(
     ctx: RunContext[CostDeps],
     query: str,
     content_type: ContentType,
     allow_image: bool = False,
 ) -> str:
-    """检索一类资料。问句尽量含公司名和毛利率/费用率/税率。"""
+    """检索一类资料。问句尽量含公司名和毛利率/费用率/税率。
+
+    Args:
+        query: 包含公司名和研究主题的检索词。
+        content_type: 必填资料类型：domestic_report 内资研报、foreign_report 外资研报、minutes 纪要、comment 点评。
+        allow_image: 是否允许检索图片。
+    """
     deps = ctx.deps
     if deps.searches_left <= 0:
         return "检索次数已用完，根据已有材料写假设。"
@@ -179,6 +203,12 @@ def search_research(
 
 def run_live_cost(run_dir: Path) -> dict:
     facts = load_json(spec_dir(run_dir) / "facts.json")
+    from valuation.shared.markets import is_foreign, number
+    if is_foreign(facts):
+        ratio = facts.get("market", {}).get("每交易单位普通股数")
+        shares = facts.get("market", {}).get("当前总股本_百万股")
+        if not facts.get("currency") or not number(ratio) or ratio <= 0 or not number(shares) or shares <= 0:
+            raise SystemExit("财报币种、当前股数或普通股/ADS比例尚未确认，不能让模型猜测基本股数。先补齐 facts.json 中的对应来源数据。")
     hist_track = hist_cost_track(facts)
     log_root = logs_dir(run_dir) / "mcp"
     log_root.mkdir(parents=True, exist_ok=True)
@@ -234,6 +264,19 @@ def _cost_try_errors(deps: CostDeps, draft: CostDraft) -> list[str]:
 
 
 def _cost_user(deps: CostDeps, hint: str) -> str:
+    from valuation.shared.markets import is_foreign, forecast_keys
+    if is_foreign(deps.facts):
+        import json
+        ratios, amounts = forecast_keys(deps.facts)
+        return (f"预测年：{deps.forecast_periods}\n适用比率字段：{ratios}\n"
+                f"历史已有金额字段：{amounts}，金额为{deps.facts.get('unit')}。\n"
+                "比率和实际适用的收支覆盖所有预测年。其他有明确来源的金额项目可按真实含义选填"
+                "fin_exp、nonop_inc、nonop_exp、other_op、associates、preferred_dividends；非适用留空。\n"
+                "不填写独立预测股数、普通股归属扣减或税前合并调整字段。\n"
+                f"历史轨迹：{json.dumps(deps.hist_track, ensure_ascii=False)}\n"
+                f"市场与股本信息：{json.dumps(deps.facts.get('market'), ensure_ascii=False)}\n"
+                f"研发是否含在管理费用中：{deps.facts.get('rd_in_admin', False)}；是否含在SG&A中：{deps.facts.get('rd_in_sga', False)}\n"
+                f"研究材料：{deps.briefs_text}\n{hint}")
     years = "、".join(deps.forecast_periods)
     ratio = "、".join(RATIO_KEYS)
     amount = "、".join(AMOUNT_KEYS)

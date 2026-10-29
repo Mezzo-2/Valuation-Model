@@ -14,6 +14,8 @@ def main() -> int:
     payload = fetch_facts(run_dir, ticker=ticker, company=company)
     company_info = payload.pop("company_info", None)
     dump_json(spec_dir(run_dir) / "facts.json", payload)
+    from valuation.historical_financials.fx import ensure_valuation_fx
+    ensure_valuation_fx(run_dir, required=False)
     if company_info:
         dump_json(spec_dir(run_dir) / "company_info.json", company_info)
     cov = payload.get("coverage") or {}

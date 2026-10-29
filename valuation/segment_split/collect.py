@@ -38,6 +38,9 @@ _SPEC_DENY = frozenset({"2G", "3G", "4G", "5G", "6G"})
 def run_live_split(run_dir: Path) -> dict[str, Any]:
     """拉年报父口径，调用一次收入拆分 agent，写出 split_plan.json。"""
     facts = load_json(spec_dir(run_dir) / "facts.json")
+    from valuation.shared.markets import is_foreign
+    if is_foreign(facts) and not facts.get("currency"):
+        raise SystemExit("财报币种尚未确认，先完成历史财务币种映射，再进行收入拆分。")
     company = str(facts.get("company") or "")
     ticker = str(facts.get("ticker") or "")
     full_code = str(facts.get("full_code") or "")
@@ -392,6 +395,9 @@ def _parse_official(payload: Any, classify: str) -> dict[str, Any]:
                 continue
             raw = item.get("value") or item.get("营业收入") or item.get("revenue")
             amount = parse_amount(raw)
+            if amount is None:
+                from valuation.historical_financials.foreign import quantity
+                amount = quantity(raw)
             if not name or amount is None:
                 continue
             rows.append(

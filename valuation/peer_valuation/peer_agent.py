@@ -35,7 +35,8 @@ ScreenFn = Callable[[str], list[dict[str, Any]]]
 
 class PeerPick(BaseModel):
     name: str = Field(description="公司名")
-    ticker: str = Field(description="股票代码，如 300308")
+    ticker: str = Field(description="带明确市场的证券代码：港股 hk00700、美股 usMAT、日股 jpn8136；A股可用300308")
+    market: Literal["A", "HK", "US", "JP", "OTHER"] | None = Field(default=None, description="候选证券的上市市场；跨市场同业必须明确")
     why: str = Field(description="为何可比，一句")
 
 
@@ -45,7 +46,7 @@ class NominateDraft(BaseModel):
 
 class CorePick(BaseModel):
     ticker: str = Field(description="必须是已填表里有 pe_y1 的代码")
-    note: str = Field(description="为何进核心池")
+    note: str = Field(description="一至两句说明业务可比点、主要差异及预测首年PE水平；高倍数离散项说明原因")
 
 
 class ClassifyDraft(BaseModel):
@@ -103,10 +104,14 @@ class ClassifyDeps:
 
 def _nominate_instructions(ctx: RunContext[NominateDeps]) -> str:
     deps = ctx.deps
+    from valuation.shared.markets import is_foreign, market_of
+    preference = (f"优先业务相近的{'美股' if market_of(deps.facts) == 'US' else '港股'}，其他市场作为补充。\n"
+                  if is_foreign(deps.facts) else "优先业务相近、卖方覆盖会够的 A 股；港美股可以作补充。\n")
     return (
         f"你在为{deps.label}找可比公司。提名同业。\n"
         f"还可选股 {deps.screens_left} 次、检索 {deps.searches_left} 次。材料够了就停。\n"
-        "优先业务相近、卖方覆盖会够的 A 股；港美股可以作补充。\n"
+        + preference +
+        "港股代码用hk加五位数字，美股用us加代码，日股用jpn加四位数字；market填写实际上市市场，不能把日股当成港股。\n"
         "screen_peers 的 concept 用短词，例如 服务器、电子制造。\n"
         "交出 8 到 12 个候选：公司名、代码、为何可比。PE 由代码填。"
     )
@@ -169,7 +174,10 @@ def _classify_instructions(ctx: RunContext[ClassifyDeps]) -> str:
     return (
         f"你在为{deps.label}选核心同业池。预测首年是{deps.y1}。\n"
         "只能读已填好的表。有 pe_y1 的才能进核心池，至少 4 家。\n"
+        f"pe_y1采用接口最新预测年PE，统一写成{deps.y1} PE。\n"
+        "证券身份以接口返回的公司名称和代码为准，提名理由不能覆盖证券身份；名称代码错配时不能入池。\n"
         "先按业务再看财务。高倍数若业务可比可留在核心池，离散度写进 note 或 rationale，必要时用 pe_adjust。\n"
+        "备注统一用一至两句写业务可比点、主要差异及当年PE水平；不要重复接口名称、字段名或缺少元数据等通用说明。\n"
         "小样本可以保留。覆盖不够写缺口，核心池只放业务可比的名字。\n"
         "pe_adjust 默认 1。要偏离须写出量化理由。"
     )
@@ -260,12 +268,16 @@ def _run_nominate_more(facts: dict, filled: list[dict[str, Any]], chat) -> Nomin
     have = "、".join(
         f"{item.get('name')} pe_y1={item.get('pe_y1')}" for item in filled
     )
+    from valuation.shared.markets import is_foreign
+    preference = ("优先同市场、业务相近且盈利口径可比的公司。" if is_foreign(facts)
+                  else "优先服务器、ODM、电子制造，卖方覆盖要够。")
+    market = str(facts.get("market_type")) if is_foreign(facts) else "A 股"
     prompt = (
         f"本公司 {deps.label}。已填表：{have}。\n"
-        "有预测首年 PE 的还不到 4 家。再提名 6 到 8 个尚未出现的 A 股同业。\n"
-        "优先服务器、ODM、电子制造，卖方覆盖要够。"
+        f"有可比预测首年 PE 的还不到 4 家。再提名 6 到 8 个尚未出现的 {market} 同业。\n"
+        + preference
     )
-    _log(deps, "[peer] 补提名 A 股")
+    _log(deps, f"[peer] 补提名 {market} 同业")
     result = nominate_agent.run_sync(prompt, deps=deps, model=chat)
     _log_messages(deps, result.all_messages())
     return result.output
@@ -420,6 +432,9 @@ def _supplement_filled(
     calls: list[dict[str, Any]],
     log_root: Path,
 ) -> list[dict[str, Any]]:
+    from valuation.shared.markets import is_foreign
+    if is_foreign(facts):
+        return []  # 原有选股器的固定 A 股行业补池仅用于 A 股。
     have = {_norm_ticker(item.get("ticker")) for item in filled}
     have.add(_norm_ticker(facts.get("ticker")))
     have.discard("")

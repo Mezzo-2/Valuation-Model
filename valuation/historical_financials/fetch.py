@@ -32,6 +32,10 @@ _LAYER_TOL = 0.01
 
 
 def fetch_facts(run_dir: Path, *, ticker: str, company: str) -> dict[str, Any]:
+    from valuation.shared.markets import market_of
+    if market_of(ticker) != "A":
+        from valuation.historical_financials.foreign import fetch_foreign
+        return fetch_foreign(run_dir, ticker=ticker, company=company)
     query = company or ticker
     years = _candidate_years()
     report_dates = [{"fiscalYear": y, "reportType": "A", "type": "year"} for y in years]

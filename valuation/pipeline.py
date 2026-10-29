@@ -103,6 +103,9 @@ def _advance(run_dir: Path, state: dict) -> int:
         if stage in completed:
             return
         print(f"\n== {stage} ==")
+        if stage in {"review_consensus", "research_dossier", "build"}:
+            from valuation.historical_financials.fx import ensure_valuation_fx
+            ensure_valuation_fx(run_dir)
         if stage == "segment_research":
             from valuation.segment_research.gather import gather_forecasts
 
@@ -172,6 +175,8 @@ def _advance(run_dir: Path, state: dict) -> int:
 
 def _build_and_certify(run_dir: Path, state: dict) -> int:
     print("== rebuild-only ==")
+    from valuation.historical_financials.fx import ensure_valuation_fx
+    ensure_valuation_fx(run_dir)
     path = build_workbook(run_dir)
     state["workbook"] = str(path)
     report = certify_workbook(run_dir, path)

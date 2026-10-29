@@ -60,6 +60,7 @@ def split_logic(canonical: dict) -> str:
 
 def structure_change(canonical: dict, facts: dict) -> str:
     periods = list(facts.get("hist_periods") or [])
+    unit = canonical.get("revenue_unit") or facts.get("unit") or "亿元"
     if len(periods) < 2:
         return "历史期间不足两年，无法计算结构变化。"
     previous, latest = periods[-2:]
@@ -68,8 +69,8 @@ def structure_change(canonical: dict, facts: dict) -> str:
     total_delta = total_latest - total_previous
     total_growth = total_delta / total_previous if total_previous else None
     lines = [
-        f"{latest} 营业收入{total_latest:.2f}亿元，较{previous}"
-        f"{_direction(total_delta)}{abs(total_delta):.2f}亿元"
+        f"{latest} 营业收入{total_latest:.2f}{unit}，较{previous}"
+        f"{_direction(total_delta)}{abs(total_delta):.2f}{unit}"
         f"（{_growth_pct(total_growth)}）。"
     ]
     groups: dict[str, list[dict]] = {}
@@ -86,13 +87,14 @@ def structure_change(canonical: dict, facts: dict) -> str:
         share = new / total_latest if total_latest else None
         lines.append(
             f"{name}：占比{_pct(share)}，同比{_growth_pct(growth)}，"
-            f"对收入变动贡献{_signed(delta)}亿元。"
+            f"对收入变动贡献{_signed(delta)}{unit}。"
         )
     return "\n".join(lines)
 
 
 def other_business(canonical: dict, facts: dict) -> str:
     periods = list(facts.get("hist_periods") or [])
+    unit = canonical.get("revenue_unit") or facts.get("unit") or "亿元"
     latest = periods[-1] if periods else ""
     total = float(facts["income"]["营业收入"][-1])
     parents = canonical.get("official_parents") or []
@@ -107,7 +109,7 @@ def other_business(canonical: dict, facts: dict) -> str:
         scope = f"{parent}项下未单列部分" if parent else "公司营业收入与已列分部之间的差额"
         basis = "年报单列" if quality == "直接披露" else "倒推收口" if quality == "倒推" else _QUALITY_LABEL.get(quality, "估算")
         lines.append(
-            f"{name}：{scope}，{latest} 为{amount:.2f}亿元、占总收入{_pct(amount / total if total else None)}；"
+            f"{name}：{scope}，{latest} 为{amount:.2f}{unit}、占总收入{_pct(amount / total if total else None)}；"
             f"取数方式为{basis}。"
         )
     agent_note = str((canonical.get("split_explanation") or {}).get("其他业务说明") or "").strip()

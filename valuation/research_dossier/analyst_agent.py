@@ -89,13 +89,19 @@ def _dossier_instructions(ctx: RunContext[AnalystDeps]) -> str:
     tail = "、".join(deps.snapshot.get("tail_segments") or []) or "其余分部"
     fcst_years = "、".join(deps.snapshot.get("forecast_periods") or []) or "预测年"
     houses = "、".join(item.get("name") or "" for item in deps.snapshot.get("bibliography") or []) or "一致预期样本券商"
+    price_unit = deps.snapshot.get("trading_currency") or "元"
+    eps_unit = deps.snapshot.get("eps_unit") or "元"
+    amount_unit = deps.snapshot.get("amount_unit") or "亿元"
+    from valuation.shared.markets import valuation_fx_note
+    fx_note = valuation_fx_note(deps.snapshot)
     return f"""你是{deps.label}的公司研究分析师。根据注入的模型结果和已有研究材料，写一篇能复核关键判断的底稿，并在同一次输出中填写 thesis、outlook、risks。
 
 数字已经锁死。营收、EPS、毛利率、费用率、目标PE、目标价、较现价空间、评级必须用注入的 display 数字。
-评级必须是「{display['rating']}」，目标价 {display['target_price']} 元，预测首年 EPS {display['eps_y1']} 元，目标PE {display['target_pe']} 倍。
+评级必须是「{display['rating']}」，目标价 {display['target_price']} {price_unit}，预测首年 EPS {display['eps_y1']} {eps_unit}，目标PE {display['target_pe']} 倍。
+估值换算说明：{fx_note or '沿用注入结果，不自行另取汇率或重复换算。'}
 
 券商用简称，例如广发证券；只点名材料里确有来源的机构，现有券商包括 {houses}。来源、日期、适用期间只从注入材料取，不要编造原文页码或报告日期。关键的最新实际、机构预测或有争议的事实，在相关判断旁用括号写明材料标题或披露者、资料日期和适用期间；不另列证据台账或数据来源章。材料不足时写出具体待验证事项，不用确定语气补足。
-表最多三张：共识对照、盈利简表、同业 PE。营收亿元一位小数，EPS 两位，PE 一位，增速百分数一位。诊断用的同业 PE 中位数不得替代已经锁定的目标 PE。
+表最多三张：共识对照、盈利简表、同业 PE。营收按{amount_unit}一位小数，EPS 两位，PE 一位，增速百分数一位。诊断用的同业 PE 中位数不得替代已经锁定的目标 PE。
 
 正文按这个目录，大标题写成「## 一、投资要点」这种中文序号。小标题写主题或分部名，三年路径写在同一段。
 1. 投资要点：先写评级、目标价、相对现价空间，再三句为什么是这个判断，数字放进三年模型营收/EPS vs 一致预期的小表。可用 ### 评级与判断。
@@ -222,6 +228,17 @@ def format_pack(snapshot: dict, spec: dict, run_dir: Path | None = None) -> str:
         "可用券商": [item.get("name") for item in snapshot.get("bibliography") or snapshot.get("sources") or []],
         "核心业务近期材料_直接引自已有brief": _brief_context(snapshot, run_dir),
     }
+    if snapshot.get("amount_unit"):
+        payload["金额单位"] = snapshot["amount_unit"]
+        payload["EPS单位"] = snapshot.get("eps_unit")
+        payload["EPS口径"] = snapshot.get("eps_scope")
+        payload["目标价币种"] = snapshot.get("trading_currency")
+        payload["分部收入"] = payload.pop("分部收入_亿元一位")
+        conclusions = payload["必须使用的结论数字"]
+        conclusions["目标价"] = conclusions.pop("目标价_元")
+        conclusions["现价"] = conclusions.pop("现价_元")
+        for year, row in payload["盈利简表"].items():
+            row["SG&A费用率_百分数"] = _pct(snapshot["pnl"][year].get("sga_ratio"))
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 

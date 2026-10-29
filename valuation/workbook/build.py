@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from datetime import date
 from copy import copy
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from openpyxl.cell.rich_text import CellRichText, TextBlock
 from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from valuation.shared.markets import is_foreign, register_labels, valuation_factor, validate_pe_basis, valuation_fx_note, label as subject_label
+from valuation.workbook.market_config import (historical_rows, fee_rows, deductible_fees, assumption_rows, pnl_rows, operating_key, operating_margin_name, ratio_name, ratio_formula, foreign_pnl_formulas, pnl_note, assumption_history_formula)
 
 from valuation.segment_research.methods import (
     RATE_FIELDS,
@@ -31,12 +34,9 @@ from valuation.historical_financials.company_info import (
 )
 from valuation.historical_financials.subjects import (
     BALANCE_BOLD,
-    BALANCE_ORDER,
     FS_LEFT_COL,
     FS_RIGHT_COL,
-    HIST_METRICS,
     INCOME_BOLD,
-    INCOME_ORDER,
     MARKET_ROWS,
     fs_label,
 )
@@ -114,6 +114,8 @@ def build_workbook(run_dir: Path) -> Path:
     for name in SHEET_ORDER:
         wb.create_sheet(name)
 
+    register_labels(wb, facts)
+
     _hist(wb, spec)
     _split(wb, spec)
     _revenue(wb, spec)
@@ -138,6 +140,7 @@ def build_hist_workbook(run_dir: Path) -> Path:
     wb = Workbook()
     default = wb.active
     default.title = "历史财务数据"
+    register_labels(wb, facts)
     _hist(wb, {"facts": facts})
     out = artifacts_dir(run_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -155,58 +158,84 @@ def _hist(wb: Workbook, spec: dict) -> None:
     ws = wb["历史财务数据"]
     last = FS_RIGHT_COL + len(hist)
 
-    write_block_header(ws, 2, FS_LEFT_COL, ["利润表（亿元）", *hist])
-    data_row = write_block_header(ws, 2, FS_RIGHT_COL, ["资产负债表（亿元）", *hist])
+    foreign = is_foreign(facts)
+    income_keys, balance_keys, metrics = historical_rows(facts)
+    unit = facts.get("unit") if foreign else "亿元"
+    write_block_header(ws, 2, FS_LEFT_COL, [f"利润表（{unit}）", *hist])
+    data_row = write_block_header(ws, 2, FS_RIGHT_COL, [f"资产负债表（{unit}）", *hist])
+    if foreign:
+        for label_col in (FS_LEFT_COL, FS_RIGHT_COL):
+            ws.cell(data_row, label_col, "财年截止日")
+            for i, year in enumerate(hist, label_col+1):
+                day = facts.get("report_dates", {}).get(year)
+                ws.cell(data_row, i, date.fromisoformat(day) if day else "-")
+                ws.cell(data_row, i).number_format = "yyyy-mm-dd"
+        data_row += 1
 
     left = data_row
-    for key in INCOME_ORDER:
+    for key in income_keys:
         left = _write_fs_line(
             ws,
             left,
             FS_LEFT_COL,
-            fs_label(key),
+            subject_label(facts, key),
             hist,
             income.get(key),
             bold=key in INCOME_BOLD,
-            formula=_income_formula(key, hist, ws) if key in {"毛利", "历史加权平均股本_百万股"} else None,
+            formula=_income_formula(key, hist, ws) if not foreign and key in {"毛利", "历史加权平均股本_百万股"} else None,
+            missing="-" if foreign else None,
         )
 
     right = data_row
-    for key in BALANCE_ORDER:
+    for key in balance_keys:
         right = _write_fs_line(
             ws,
             right,
             FS_RIGHT_COL,
-            fs_label(key),
+            subject_label(facts, key),
             hist,
             balance.get(key),
             bold=key in BALANCE_BOLD,
-            formula=_wc_formula(hist, ws) if key == "营运资本" else None,
+            formula=_wc_formula(hist, ws, guarded=foreign) if key == "营运资本" else None,
+            missing="-" if foreign else None,
         )
+
+    if foreign:
+        for year in hist:
+            if f"{year}/少数股东损益=净利润-归母净利润" in facts.get("derived", []):
+                r = _row(ws, "少数股东损益")
+                ws.cell(r, _pcol(hist, year), f"={cell_ref(ws, '净利润', year, same_sheet=True)}-{cell_ref(ws, '归母净利润', year, same_sheet=True)}")
 
     metric_row = max(left, right) + 1
     row = write_block_header(ws, metric_row, FS_LEFT_COL, ["历史指标", *hist])
-    for i, (label, num_key, den_key) in enumerate(HIST_METRICS):
+    for i, (label, num_key, den_key) in enumerate(metrics):
         ws.cell(row=row, column=FS_LEFT_COL, value=label)
         for j, year in enumerate(hist):
             col = FS_LEFT_COL + 1 + j
             if label == "营业收入增速":
                 if j == 0:
+                    if foreign: ws.cell(row, col, "-")
                     continue
-                prev = cell_ref(ws, fs_label(num_key), hist[j - 1], same_sheet=True)
-                cur = cell_ref(ws, fs_label(num_key), year, same_sheet=True)
-                ws.cell(row=row, column=col, value=f"={cur}/{prev}-1")
+                prev = cell_ref(ws, subject_label(facts, num_key), hist[j - 1], same_sheet=True)
+                cur = cell_ref(ws, subject_label(facts, num_key), year, same_sheet=True)
+                ws.cell(row=row, column=col, value=ratio_formula(cur, prev, growth=True, guarded=foreign))
             else:
-                num = cell_ref(ws, fs_label(num_key), year, same_sheet=True)
-                den = cell_ref(ws, fs_label(den_key), year, same_sheet=True)
-                ws.cell(row=row, column=col, value=f"={num}/{den}")
+                num = cell_ref(ws, subject_label(facts, num_key), year, same_sheet=True)
+                den = cell_ref(ws, subject_label(facts, den_key), year, same_sheet=True)
+                ws.cell(row=row, column=col, value=ratio_formula(num, den, guarded=foreign))
         row += 1
 
     row += 1
-    write_section_row(ws, row, ["市场快照"], FS_LEFT_COL + len(hist), start_col=FS_LEFT_COL)
+    write_section_row(ws, row, [f"市场快照（{facts.get('trading_currency') or '币种待确认'}）" if foreign else "市场快照"], FS_LEFT_COL + len(hist), start_col=FS_LEFT_COL)
     row += 1
-    row = _write_market(ws, row, market, facts.get("as_of"))
+    row = _write_market(ws, row, market, facts.get("as_of"), facts=facts)
 
+    if foreign:
+        text = f"来源：进门财务接口；金额 {unit}；EPS {facts.get('eps_unit')}；数据日期 {str(facts.get('as_of'))[:10]}"
+        write_note(ws, row+1, 1, text)
+        ws.merge_cells(start_row=row+1, start_column=1, end_row=row+1, end_column=last)
+        ws.cell(row+1, 1).alignment = Alignment(wrap_text=True, vertical="center")
+        ws.row_dimensions[row+1].height = 30
     write_sheet_title(ws, facts["company"], last)
     ws.column_dimensions["A"].width = 32
     ws.column_dimensions["E"].width = 3
@@ -219,6 +248,7 @@ def _hist(wb: Workbook, spec: dict) -> None:
     paint_stub_column(ws, FS_LEFT_COL, NEAR)
     paint_stub_column(ws, FS_RIGHT_COL, NEAR)
     finish_sheet(ws)
+    _format_market_numbers(ws, facts, ((1, 2, 4), (6, 7, 9)))
 
 
 def _split(wb: Workbook, spec: dict) -> None:
@@ -370,11 +400,11 @@ def _revenue(wb: Workbook, spec: dict) -> None:
             row += 1
             parent_rev_row = row
             ws.cell(row=row, column=1, value="分部收入")
-            ws.cell(row=row, column=unit_col, value="亿元")
+            ws.cell(row=row, column=unit_col, value=facts.get("unit") or "亿元")
             row += 1
             for child in group.children:
                 row = _write_revenue_build(
-                    ws, row, child, forecasts, hist, fcst, periods, last, unit_col
+                    ws, row, child, forecasts, hist, fcst, periods, last, unit_col, guarded=is_foreign(facts)
                 )
             for year in periods:
                 parts = "+".join(
@@ -385,12 +415,12 @@ def _revenue(wb: Workbook, spec: dict) -> None:
             top_lines.append((group.parent, parent_rev_row))
         elif group.leaf:
             row = _write_revenue_build(
-                ws, row, group.leaf, forecasts, hist, fcst, periods, last, unit_col
+                ws, row, group.leaf, forecasts, hist, fcst, periods, last, unit_col, guarded=is_foreign(facts)
             )
             top_lines.append((group.leaf["name"], group.leaf["_rows"]["分部收入"]))
     if company_res:
         row = _write_revenue_build(
-            ws, row, company_res, forecasts, hist, fcst, periods, last, unit_col
+            ws, row, company_res, forecasts, hist, fcst, periods, last, unit_col, guarded=is_foreign(facts)
         )
         top_lines.append((company_res["name"], company_res["_rows"]["分部收入"]))
 
@@ -407,7 +437,7 @@ def _revenue(wb: Workbook, spec: dict) -> None:
         for year in periods:
             seg = cell_ref_at(ws, rev_row, year)
             total = cell_ref_at(ws, total_row, year)
-            ws.cell(row=row, column=_pcol(periods, year), value=f"={seg}/{total}")
+            ws.cell(row=row, column=_pcol(periods, year), value=ratio_formula(seg, total, guarded=is_foreign(facts)))
         row += 1
 
     mark_subtotal(ws, total_row, 1, unit_col - 1, line=True)
@@ -421,10 +451,12 @@ def _revenue(wb: Workbook, spec: dict) -> None:
             ratio.add(r)
     apply_number_formats(ws, ratio, last, note_col)
     paint_stub_column(ws, 1, NEAR)
+    if is_foreign(facts):
+        _fit_market_labels(ws, [note_col])
     finish_sheet(ws)
 
 
-def _write_revenue_build(ws, row, seg, forecasts, hist, fcst, periods, last, unit_col) -> int:
+def _write_revenue_build(ws, row, seg, forecasts, hist, fcst, periods, last, unit_col, *, guarded=False) -> int:
     name = seg["name"]
     method = seg["method"]
     fc = forecasts[name]
@@ -438,7 +470,7 @@ def _write_revenue_build(ws, row, seg, forecasts, hist, fcst, periods, last, uni
         ws.cell(row=row, column=1, value="分部收入")
         for year in hist:
             ws.cell(row=row, column=_pcol(periods, year), value=fc["historical_data"]["分部收入"][year])
-        ws.cell(row=row, column=unit_col, value="亿元")
+        ws.cell(row=row, column=unit_col, value=seg.get("unit") or fc.get("revenue_unit") or "亿元")
         rows["分部收入"] = row
         row += 1
         grow_rev = rows["收入增速"]
@@ -449,7 +481,7 @@ def _write_revenue_build(ws, row, seg, forecasts, hist, fcst, periods, last, uni
             prev = hist[i - 1]
             cur = cell_ref_at(ws, rev_row, year)
             pri = cell_ref_at(ws, rev_row, prev)
-            ws.cell(row=grow_rev, column=_pcol(periods, year), value=f"={cur}/{pri}-1")
+            ws.cell(row=grow_rev, column=_pcol(periods, year), value=ratio_formula(cur, pri, growth=True, guarded=guarded))
         for i, year in enumerate(fcst):
             prev = hist[-1] if i == 0 else fcst[i - 1]
             g = cell_ref_at(ws, grow_rev, year)
@@ -482,7 +514,7 @@ def _write_revenue_build(ws, row, seg, forecasts, hist, fcst, periods, last, uni
                 column=_pcol(periods, year),
                 value=_driver_revenue_formula(ws, spec, rows, year),
             )
-        ws.cell(row=row, column=unit_col, value="亿元")
+        ws.cell(row=row, column=unit_col, value=seg.get("unit") or fc.get("revenue_unit") or "亿元")
         row += 1
         if spec.fcst_mode == "grow":
             for i, year in enumerate(fcst):
@@ -503,7 +535,7 @@ def _write_revenue_build(ws, row, seg, forecasts, hist, fcst, periods, last, uni
                         continue
                     cur = cell_ref_at(ws, rows[f"构建_{field}"], year)
                     pri = cell_ref_at(ws, rows[f"构建_{field}"], hist[i - 1])
-                    ws.cell(row=assume_row, column=_pcol(periods, year), value=f"={cur}/{pri}-1")
+                    ws.cell(row=assume_row, column=_pcol(periods, year), value=ratio_formula(cur, pri, growth=True, guarded=guarded))
                 for year in fcst:
                     write_input(
                         ws,
@@ -537,7 +569,7 @@ def _write_revenue_build(ws, row, seg, forecasts, hist, fcst, periods, last, uni
             continue
         cur = cell_ref_at(ws, rows["分部收入"], year)
         pri = cell_ref_at(ws, rows["分部收入"], periods[i - 1])
-        ws.cell(row=row, column=_pcol(periods, year), value=f"={cur}/{pri}-1")
+        ws.cell(row=row, column=_pcol(periods, year), value=ratio_formula(cur, pri, growth=True, guarded=guarded))
     return row + 1
 
 
@@ -560,137 +592,67 @@ def _driver_revenue_formula(ws, spec, rows: dict[str, int], year: str) -> str:
 
 
 def _cost(wb: Workbook, spec: dict) -> None:
-    facts = spec["facts"]
-    cost = spec["cost"]
-    hist = facts["hist_periods"]
-    fcst = facts["forecast_periods"]
+    facts, cost = spec["facts"], spec["cost"]
+    hist, fcst = facts["hist_periods"], facts["forecast_periods"]
     periods = hist + fcst
-    ws = wb["运营成本预测"]
+    foreign = is_foreign(facts)
+    ws, fs = wb["运营成本预测"], wb["历史财务数据"]
     last = 2 + len(periods)
     row = write_first_section_header(ws, [*periods, "备注"])
-
-    def assume(label: str, hist_formula_from: str | None, fcst_map: dict, note: str = "") -> int:
-        nonlocal row
-        here = row
-        ws.cell(row=row, column=1, value=label)
-        if hist_formula_from:
-            for year in hist:
-                src = cell_ref(wb["历史财务数据"], hist_formula_from, year, same_sheet=False)
-                if label == "有效税率":
-                    den = cell_ref(wb["历史财务数据"], "税前利润", year, same_sheet=False)
-                else:
-                    den = cell_ref(wb["历史财务数据"], "营业收入", year, same_sheet=False)
-                ws.cell(row=row, column=_pcol(periods, year), value=f"={src}/{den}")
+    for key, name, numerator, denominator in assumption_rows(facts, cost):
+        ws.cell(row, 1, name)
+        for year in hist:
+            if foreign and numerator and not denominator and numerator not in historical_rows(facts)[0]:
+                ws.cell(row, _pcol(periods, year), "-")
+                continue
+            ref = lambda label: cell_ref(fs, label, year)
+            ws.cell(row, _pcol(periods, year), assumption_history_formula(facts, key, numerator, denominator, ref))
         for year in fcst:
-            write_input(ws, row, _pcol(periods, year), fcst_map[year])
-        if note:
-            write_note(ws, row, last, note)
+            write_input(ws, row, _pcol(periods, year), cost[key][year])
+        if key == "gross_margin":
+            write_note(ws, row, last, cost["rationale"])
         row += 1
-        return here
 
-    assume("合并毛利率", "毛利", cost["gross_margin"], cost["rationale"])
-    assume("销售费用率", "销售费用", cost["sales_ratio"])
-    assume("管理费用率", "管理费用", cost["admin_ratio"])
-    assume("研发费用率", "研发费用", cost["rd_ratio"])
-    assume("有效税率", "所得税费用", cost["tax_rate"])
-    fs = wb["历史财务数据"]
-    ws.cell(row=row, column=1, value="财务费用假设")
-    for year in hist:
-        ws.cell(
-            row=row,
-            column=_pcol(periods, year),
-            value=f"={cell_ref(fs, '财务费用', year)}",
-        )
-    for year in fcst:
-        write_input(ws, row, _pcol(periods, year), cost["fin_exp"][year])
-    row += 1
-    ws.cell(row=row, column=1, value="营业外收入")
-    for year in hist:
-        ws.cell(
-            row=row,
-            column=_pcol(periods, year),
-            value=f"={cell_ref(wb['历史财务数据'], '营业外收入', year)}",
-        )
-    for year in fcst:
-        write_input(ws, row, _pcol(periods, year), cost["nonop_inc"][year])
-    row += 1
-    ws.cell(row=row, column=1, value="营业外支出")
-    for year in hist:
-        ws.cell(
-            row=row,
-            column=_pcol(periods, year),
-            value=f"={cell_ref(wb['历史财务数据'], '营业外支出', year)}",
-        )
-    for year in fcst:
-        write_input(ws, row, _pcol(periods, year), cost["nonop_exp"][year])
-    row += 1
-    ws.cell(row=row, column=1, value="少数股东比率")
-    for year in hist:
-        minority = cell_ref(fs, "少数股东损益", year)
-        parent = cell_ref(fs, "归母净利润", year)
-        ws.cell(
-            row=row,
-            column=_pcol(periods, year),
-            value=f"={minority}/({parent}+{minority})",
-        )
-    for year in fcst:
-        write_input(ws, row, _pcol(periods, year), cost["minority"][year])
-    row += 1
-    ws.cell(row=row, column=1, value="其他经营净收益")
-    for year in hist:
-        ebit = cell_ref(fs, "息税前利润", year)
-        gp = cell_ref(fs, "毛利", year)
-        s = cell_ref(fs, "销售费用", year)
-        a = cell_ref(fs, "管理费用", year)
-        d = cell_ref(fs, "研发费用", year)
-        ws.cell(
-            row=row,
-            column=_pcol(periods, year),
-            value=f"={ebit}-({gp}-{s}-{a}-{d})",
-        )
-    for year in fcst:
-        write_input(ws, row, _pcol(periods, year), cost["other_op"][year])
-    row += 1
-
+    if foreign:
+        _wrap_note_block(ws, 3, row-1, last, cost["rationale"])
     write_section_row(ws, row, ["成本毛利区"], last)
     row += 1
-    ws.cell(row=row, column=1, value="营业收入")
+    ws.cell(row, 1, "营业收入")
     for year in periods:
-        ws.cell(row=row, column=_pcol(periods, year), value=f"={cell_ref(wb['收入预测'], '营业收入', year)}")
+        ws.cell(row, _pcol(periods, year), "="+cell_ref(wb["收入预测"], "营业收入", year))
     row += 1
-    ws.cell(row=row, column=1, value="毛利")
+    ws.cell(row, 1, "毛利")
     for year in periods:
         rev = cell_ref(ws, "营业收入", year, same_sheet=True)
         gm = cell_ref(ws, "合并毛利率", year, same_sheet=True)
-        ws.cell(row=row, column=_pcol(periods, year), value=f"={rev}*{gm}")
+        formula = f'=IF(AND(ISNUMBER({rev}),ISNUMBER({gm})),{rev}*{gm},"-")' if foreign else f"={rev}*{gm}"
+        ws.cell(row, _pcol(periods, year), formula)
     row += 1
-    ws.cell(row=row, column=1, value="营业成本")
+    ws.cell(row, 1, subject_label(facts, "营业成本"))
     for year in periods:
         rev = cell_ref(ws, "营业收入", year, same_sheet=True)
         gp = cell_ref(ws, "毛利", year, same_sheet=True)
-        ws.cell(row=row, column=_pcol(periods, year), value=f"={rev}-{gp}")
+        formula = f'=IF(AND(ISNUMBER({rev}),ISNUMBER({gp})),{rev}-{gp},"-")' if foreign else f"={rev}-{gp}"
+        ws.cell(row, _pcol(periods, year), formula)
     row += 1
 
     write_section_row(ws, row, ["费用区"], last)
     row += 1
-    for label, ratio in (
-        ("销售费用", "销售费用率"),
-        ("管理费用", "管理费用率"),
-        ("研发费用", "研发费用率"),
-    ):
-        ws.cell(row=row, column=1, value=label)
+    fees = fee_rows(facts)
+    for fee, ratio in fees:
+        ws.cell(row, 1, subject_label(facts, fee))
         for year in periods:
             rev = cell_ref(ws, "营业收入", year, same_sheet=True)
-            rt = cell_ref(ws, ratio, year, same_sheet=True)
-            ws.cell(row=row, column=_pcol(periods, year), value=f"={rev}*{rt}")
+            rt = cell_ref(ws, ratio_name(facts, ratio), year, same_sheet=True)
+            formula = f'=IF(AND(ISNUMBER({rev}),ISNUMBER({rt})),{rev}*{rt},"-")' if foreign else f"={rev}*{rt}"
+            ws.cell(row, _pcol(periods, year), formula)
         row += 1
-    ws.cell(row=row, column=1, value="总费用")
+    ws.cell(row, 1, "总费用")
     for year in periods:
-        parts = "+".join(
-            cell_ref(ws, fee, year, same_sheet=True)
-            for fee in ("销售费用", "管理费用", "研发费用")
-        )
-        ws.cell(row=row, column=_pcol(periods, year), value=f"={parts}")
+        refs = [cell_ref(ws, fee, year, same_sheet=True) for fee in deductible_fees(facts)]
+        parts = "+".join(refs)
+        formula = (f'=IF(COUNT({",".join(refs)})={len(refs)},{parts},"-")' if foreign else f"={parts}")
+        ws.cell(row, _pcol(periods, year), formula)
 
     year_end = last - 1
     mark_subtotal(ws, _row(ws, "毛利"), 1, year_end, fill=True)
@@ -699,14 +661,12 @@ def _cost(wb: Workbook, spec: dict) -> None:
     write_sheet_title(ws, facts["company"], last)
     set_col_widths(ws, last, first=32, other=13)
     ws.column_dimensions[get_column_letter(last)].width = 36
-    ratio_rows = set()
-    for r in range(3, ws.max_row + 1):
-        lab = str(ws.cell(row=r, column=1).value or "")
-        if "率" in lab:
-            ratio_rows.add(r)
+    ratio_rows = {r for r in range(3, ws.max_row+1) if "率" in str(ws.cell(r, 1).value or "")}
     apply_number_formats(ws, ratio_rows, last, last)
     paint_stub_column(ws, 1, NEAR)
     finish_sheet(ws)
+    if foreign: ws.cell(3, last).alignment = Alignment(wrap_text=True, vertical="top")
+    _format_market_numbers(ws, facts, ((1, 2, last-1),))
 
 
 def _pnl(wb: Workbook, spec: dict) -> None:
@@ -717,31 +677,16 @@ def _pnl(wb: Workbook, spec: dict) -> None:
     ws = wb["利润表预测"]
     last = 2 + len(periods)
     row = write_first_section_header(ws, [*periods, "备注"])
-    labels = [
-        "营业收入",
-        "营业收入同比",
-        "营业成本",
-        "合并毛利率",
-        "毛利",
-        "销售费用",
-        "管理费用",
-        "研发费用",
-        "息税前利润",
-        "财务费用",
-        "营业外收入",
-        "营业外支出",
-        "税前利润",
-        "所得税费用",
-        "少数股东损益",
-        "归母净利润",
-        "归母净利润同比",
-        "EPS",
-    ]
+    foreign = is_foreign(facts)
+    labels = pnl_rows(facts, spec["cost"])
     derived = {"营业收入同比", "合并毛利率", "归母净利润同比"}
     for label in labels:
-        ws.cell(row=row, column=1, value=label)
+        ws.cell(row=row, column=1, value=subject_label(facts, label) if foreign else label)
         if label not in derived:
             for year in hist:
+                if foreign and label not in historical_rows(facts)[0]:
+                    ws.cell(row, _pcol(periods, year), "-")
+                    continue
                 src = fs_label(label) if label == "EPS" else label
                 ws.cell(
                     row=row,
@@ -770,9 +715,21 @@ def _pnl(wb: Workbook, spec: dict) -> None:
                 continue
             cur = cell_ref(ws, source, year, same_sheet=True)
             pri = cell_ref(ws, source, periods[i - 1], same_sheet=True)
-            ws.cell(row=r, column=col(year), value=f"={cur}/{pri}-1")
+            ws.cell(row=r, column=col(year), value=ratio_formula(cur, pri, growth=True, guarded=foreign))
 
     for year in fcst:
+        if foreign:
+            ref = lambda key: cell_ref(ws, key, year, same_sheet=True)
+            names = {key: name for key, name, _, _ in assumption_rows(facts, spec["cost"])}
+            assume = lambda key: cell_ref(wb["运营成本预测"], names[key], year)
+            build = lambda key: cell_ref(wb["运营成本预测"], key, year)
+            shares = f"'历史财务数据'!B{_row(wb['历史财务数据'], '当前总股本_百万股')}"
+            if facts["market"]["每交易单位普通股数"] != 1:
+                shares += f"*'历史财务数据'!B{_row(wb['历史财务数据'], '每交易单位普通股数')}"
+            formulas = foreign_pnl_formulas(facts, spec["cost"], ref, assume, cell_ref(wb["收入预测"], "营业收入", year), build, shares)
+            for key, formula in formulas.items():
+                ws.cell(_row(ws, key), col(year), "="+formula)
+            continue
         ws.cell(row=_row(ws, "营业收入"), column=col(year), value=f"={cell_ref(wb['收入预测'], '营业收入', year)}")
         ws.cell(row=_row(ws, "营业成本"), column=col(year), value=f"={cell_ref(wb['运营成本预测'], '营业成本', year)}")
         ws.cell(row=_row(ws, "毛利"), column=col(year), value=f"={cell_ref(wb['运营成本预测'], '毛利', year)}")
@@ -812,10 +769,10 @@ def _pnl(wb: Workbook, spec: dict) -> None:
         ws,
         _row(ws, "税前利润"),
         last,
-        "历史列沿用历史财务数据口径。预测列：息税前利润＝毛利－销售费用－管理费用－研发费用＋其他经营净收益；"
-        "税前利润＝息税前利润－财务费用＋营业外收入－营业外支出。"
-        "历史披露或接口的息税前利润口径可能与上述模型定义不同。",
+        pnl_note(facts),
     )
+    if foreign:
+        _wrap_note_block(ws, 3, _row(ws, "EPS"), last, pnl_note(facts))
     for label in ("营业收入同比", "合并毛利率", "归母净利润同比"):
         ws.cell(row=_row(ws, label), column=1).alignment = Alignment(indent=1, vertical="center")
     year_end = last - 1
@@ -835,12 +792,15 @@ def _pnl(wb: Workbook, spec: dict) -> None:
     )
     paint_stub_column(ws, 1, NEAR)
     finish_sheet(ws)
+    if foreign: ws.cell(3, last).alignment = Alignment(wrap_text=True, vertical="top")
+    _format_market_numbers(ws, facts, ((1, 2, last-1),))
 
 
 def _valuation(wb: Workbook, spec: dict) -> None:
     facts = spec["facts"]
     cons = spec["consensus"]
     comps = spec["comps"]
+    validate_pe_basis(facts, comps)
     fcst = facts["forecast_periods"]
     ws = wb["估值预测"]
     last = 6
@@ -859,7 +819,12 @@ def _valuation(wb: Workbook, spec: dict) -> None:
     last_inst = row - 1
     for i in range(3):
         col = get_column_letter(3 + i)
-        ws.cell(row=row, column=3 + i, value=consensus_median_formula(first_inst, last_inst, col))
+        ws.cell(row=row, column=3 + i, value=consensus_median_formula(first_inst, last_inst, col, guarded=is_foreign(facts)))
+    if cons.get("revenue_note"):
+        write_note(ws, row, note_col, cons["revenue_note"])
+        ws.cell(row, note_col).alignment = Alignment(wrap_text=True, vertical="center")
+        units = sum(2 if ord(c) > 127 else 1 for c in cons["revenue_note"])
+        ws.row_dimensions[row].height = max(30, math.ceil(units / 32) * 17 + 8)
     row += 1
     ws.cell(row=row, column=1, value="本模型预测")
     for i, year in enumerate(fcst):
@@ -867,7 +832,8 @@ def _valuation(wb: Workbook, spec: dict) -> None:
     row += 2
 
     y1 = fcst[0]
-    write_section_row(ws, row, ["核心同业池", f"{y1} PE", "PE_TTM", "总市值", "单位", "备注"], last)
+    pe_title = f"{y1} PE"
+    write_section_row(ws, row, ["核心同业池", pe_title, "PE_TTM", "总市值", "单位", "备注"], last)
     row += 1
     core_start = row
     for name in comps["core"]:
@@ -876,7 +842,12 @@ def _valuation(wb: Workbook, spec: dict) -> None:
         ws.cell(row=row, column=3, value=name["pe_ttm"])
         ws.cell(row=row, column=4, value=name["mcap"])
         ws.cell(row=row, column=5, value=_mcap_unit(name.get("currency")))
-        write_note(ws, row, note_col, name.get("note") or "")
+        peer_note = name.get("note") or ""
+        write_note(ws, row, note_col, peer_note)
+        if is_foreign(facts):
+            ws.cell(row, note_col).alignment = Alignment(wrap_text=True, vertical="center")
+            units = sum(2 if ord(c) > 127 else 1 for c in peer_note)
+            ws.row_dimensions[row].height = max(30, math.ceil(units / 32) * 17 + 8)
         row += 1
     core_end = row - 1
     ws.cell(row=row, column=1, value="核心池均值")
@@ -889,6 +860,18 @@ def _valuation(wb: Workbook, spec: dict) -> None:
     mean_pe = f"B{_row(ws, '核心池均值')}"
     eps = cell_ref(wb["利润表预测"], "EPS", y1)
     price = "历史财务数据!B" + str(_row(wb["历史财务数据"], fs_label("当前股价")))
+    if is_foreign(facts):
+        factor = valuation_factor(facts)
+        ws.cell(row=row, column=1, value="每股收益至交易价格换算系数")
+        write_input(ws, row, 2, factor)
+        fx_note = valuation_fx_note(facts)
+        if fx_note:
+            write_note(ws, row, note_col, fx_note)
+            ws.cell(row, note_col).alignment = Alignment(wrap_text=True, vertical="center")
+            units = sum(2 if ord(c) > 127 else 1 for c in fx_note)
+            ws.row_dimensions[row].height = max(30, math.ceil(units / 32) * 17 + 8)
+        eps = f"({eps}*B{row})"
+        row += 1
     write_section_row(
         ws,
         row,
@@ -942,12 +925,14 @@ def _valuation(wb: Workbook, spec: dict) -> None:
         result_row = _row(ws, label)
         mark_result_cell(ws, result_row, 1)
         mark_result_cell(ws, result_row, 2)
-    write_sheet_title(ws, facts["company"], last)
+    write_sheet_title(ws, f"{facts['company']}（目标价 {facts.get('trading_currency')}）" if is_foreign(facts) else facts["company"], last)
     set_col_widths(ws, last, first=24, other=14)
     ws.column_dimensions["B"].width = 20
     ws.column_dimensions["E"].width = 14
     ws.column_dimensions["F"].width = 36
     apply_number_formats(ws, {_row(ws, "较现价空间")}, last, note_col)
+    if is_foreign(facts):
+        ws.cell(_row(ws, "每股收益至交易价格换算系数"), 2).number_format = "0.000000"
     peer_end = _row(ws, "核心池中位数")
     for peer_row in range(core_start, peer_end + 1):
         for col in (2, 3):
@@ -963,6 +948,7 @@ def _valuation(wb: Workbook, spec: dict) -> None:
         ws.cell(row=scenario, column=4).number_format = PX_FMT
         ws.cell(row=scenario, column=5).number_format = SIGNED_PCT_FMT
     paint_stub_column(ws, 1, NEAR)
+    if is_foreign(facts): _fit_market_labels(ws, [1])
     finish_sheet(ws)
 
 
@@ -1002,18 +988,17 @@ def _summary(wb: Workbook, spec: dict) -> None:
         ("EPS_最近实际", f"={cell_ref(pnl, 'EPS', last_a)}"),
         ("投资评级", f"=估值预测!B{_row(val, '投资评级')}"),
     ]
-    market = _market_pairs(info, fs)
+    market = _market_pairs(info, fs, facts=facts)
     write_section_row(ws, row, ["估值概览"], _SUM_LEFT_END, start_col=_SUM_LEFT)
     write_section_row(ws, row, ["当前行情"], _SUM_RIGHT_END, start_col=_SUM_RIGHT)
     left_end, large = _write_value_pairs(ws, row + 1, overview, _SUM_LEFT, ROW_LABEL_VAL)
     right_end, _ = _write_value_pairs(ws, row + 1, market, _SUM_RIGHT, ROW_LABEL_MARKET)
     row = _after_pair(ws, left_end, right_end)
 
-    left_lines = _forecast_lines(pnl, periods_show, periods_all)
-    right_lines = [
-        (label, [f"={cell_ref(cost, label, year)}" for year in periods_show])
-        for label in ("合并毛利率", "销售费用率", "管理费用率", "研发费用率", "有效税率")
-    ]
+    left_lines = _forecast_lines(pnl, periods_show, periods_all, facts=facts)
+    right_labels = ([name for _, name, _, _ in assumption_rows(facts, spec["cost"])] if is_foreign(facts) else
+                    ("合并毛利率", "销售费用率", "管理费用率", "研发费用率", "有效税率"))
+    right_lines = [(name, [f"={cell_ref(cost, name, year)}" for year in periods_show]) for name in right_labels]
     write_section_row(
         ws, row, ["财务预测", *periods_show], _SUM_LEFT_END, start_col=_SUM_LEFT
     )
@@ -1022,10 +1007,12 @@ def _summary(wb: Workbook, spec: dict) -> None:
     )
     left_end, left_rows = _write_year_block(ws, row + 1, left_lines, _SUM_LEFT, ROW_LABEL_VAL)
     right_end, _right_rows = _write_year_block(ws, row + 1, right_lines, _SUM_RIGHT, ROW_LABEL_MARKET)
-    for label in ("营业收入", "毛利", "息税前利润"):
-        mark_bold_row(ws, left_rows[label], _SUM_LEFT, _SUM_LEFT_END)
-    for label in ("归母净利润", "EPS"):
-        mark_subtotal(ws, left_rows[label], _SUM_LEFT, _SUM_LEFT_END, fill=True)
+    for key in ("营业收入", "毛利", operating_key(facts)):
+        name = subject_label(facts, key) if is_foreign(facts) else key
+        mark_bold_row(ws, left_rows[name], _SUM_LEFT, _SUM_LEFT_END)
+    for key in ("归母净利润", "EPS"):
+        name = subject_label(facts, key) if is_foreign(facts) else key
+        mark_subtotal(ws, left_rows[name], _SUM_LEFT, _SUM_LEFT_END, fill=True)
     row = _after_pair(ws, left_end, right_end)
 
     thesis = list(notes.get("thesis") or [])
@@ -1053,6 +1040,7 @@ def _summary(wb: Workbook, spec: dict) -> None:
     finish_sheet(ws)
     for item_row, item_col in large:
         _enlarge_result(ws.cell(row=item_row, column=item_col))
+    _format_market_numbers(ws, facts, ((1, 2, 5), (3, 5, 5), (7, 8, 11), (9, 11, 11)))
 
 
 _SUM_LEFT = 1
@@ -1102,6 +1090,11 @@ def _write_company_intro(ws, info: dict, facts: dict) -> int:
     write_page_title(ws, _company_heading(facts, info), _SUM_LAST, start_col=_SUM_LEFT)
     row = 2
     profile = [(label, value) for label, value in company_profile_rows(info) if label != "A股代码"]
+    if is_foreign(facts):
+        profile = [("行业分类" if name == "申万行业" else name, value) for name, value in profile]
+        profile += [("财务单位", str(facts.get("unit") or "待确认")),
+                    ("每股收益单位", str(facts.get("eps_unit") or "待确认")),
+                    ("交易币种", str(facts.get("trading_currency") or "待确认"))]
     business = [value for label, value in profile if label == "主营业务"]
     _write_color_legend(ws, _LEGEND_ROW)
     pending: tuple[str, str] | None = None
@@ -1254,7 +1247,7 @@ def _write_value_pairs(
     return row, large
 
 
-def _market_pairs(info: dict, fs) -> list[tuple[str, object]]:
+def _market_pairs(info: dict, fs, *, facts=None) -> list[tuple[str, object]]:
     shown: list[tuple[str, object]] = []
     for label, value, _is_pct in company_market_rows(info):
         if label == "当前股价（元）":
@@ -1263,29 +1256,29 @@ def _market_pairs(info: dict, fs) -> list[tuple[str, object]]:
             value = f"=历史财务数据!B{_row(fs, fs_label('总市值_亿'))}"
         elif label == "流通市值（亿元）":
             value = f"=历史财务数据!B{_row(fs, fs_label('流通市值_亿'))}"
+        if facts and is_foreign(facts):
+            label = label.replace("（亿元）", f"（{_mcap_unit(facts.get('trading_currency'))}）")
         shown.append((label, value))
     return shown
 
 
-def _forecast_lines(pnl, periods_show: list[str], periods_all: list[str]) -> list[tuple[str, list[str]]]:
-    lines = [
-        (label, [f"={cell_ref(pnl, label, year)}" for year in periods_show])
-        for label in ("营业收入", "毛利", "息税前利润", "归母净利润", "EPS")
-    ]
+def _forecast_lines(pnl, periods_show: list[str], periods_all: list[str], *, facts=None) -> list[tuple[str, list[str]]]:
+    facts = facts or {}
+    foreign = is_foreign(facts)
+    op = operating_key(facts)
+    lines = [(subject_label(facts, key) if foreign else key,
+              [f"={cell_ref(pnl, key, year)}" for year in periods_show])
+             for key in ("营业收入", "毛利", op, "归母净利润", "EPS")]
     growth = []
     for year in periods_show:
-        prev = periods_all[periods_all.index(year) - 1]
-        cur = cell_ref(pnl, "营业收入", year)
-        pri = cell_ref(pnl, "营业收入", prev)
-        growth.append(f"={cur}/{pri}-1")
+        prev = periods_all[periods_all.index(year)-1]
+        cur, pri = cell_ref(pnl, "营业收入", year), cell_ref(pnl, "营业收入", prev)
+        growth.append(ratio_formula(cur, pri, growth=True, guarded=foreign))
     lines.append(("营业收入同比增速", growth))
-    for label in ("息税前利润", "归母净利润"):
-        formulas = []
-        for year in periods_show:
-            num = cell_ref(pnl, label, year)
-            rev = cell_ref(pnl, "营业收入", year)
-            formulas.append(f"={num}/{rev}")
-        rate = "息税前利润率" if label == "息税前利润" else "归母净利润率"
+    for key in (op, "归母净利润"):
+        formulas = [ratio_formula(cell_ref(pnl, key, year), cell_ref(pnl, "营业收入", year), guarded=foreign)
+                    for year in periods_show]
+        rate = operating_margin_name(facts) if key == op else "归母净利润率"
         lines.append((rate, formulas))
     return lines
 
@@ -1352,8 +1345,9 @@ def _enlarge_result(cell) -> None:
 
 def _bold_block(ws, row: int, start: int, width: int) -> None:
     label = str(ws.cell(row=row, column=start).value or "")
-    line = label in _FS_LINE_LABELS
-    fill = label in _FS_FILL_LABELS
+    aliases = getattr(ws, "_subject_labels", {})
+    line = label in {aliases.get(k, k) for k in _FS_LINE_LABELS}
+    fill = label in {aliases.get(k, k) for k in _FS_FILL_LABELS}
     if line or fill:
         mark_subtotal(ws, row, start, start + width - 1, line=line, fill=fill)
         return
@@ -1370,6 +1364,7 @@ def _write_fs_line(
     *,
     bold: bool = False,
     formula: list[str] | None = None,
+    missing=None,
 ) -> int:
     ws.cell(row=row, column=label_col, value=label)
     for i, _year in enumerate(hist):
@@ -1378,6 +1373,8 @@ def _write_fs_line(
             ws.cell(row=row, column=col, value=formula[i])
         elif series and i < len(series) and series[i] is not None:
             ws.cell(row=row, column=col, value=series[i])
+        elif missing is not None:
+            ws.cell(row=row, column=col, value=missing)
     if bold:
         _bold_block(ws, row, label_col, 1 + len(hist))
     return row + 1
@@ -1404,22 +1401,24 @@ def _income_formula(key: str, hist: list[str], ws) -> list[str] | None:
     return None
 
 
-def _wc_formula(hist: list[str], ws) -> list[str] | None:
+def _wc_formula(hist: list[str], ws, *, guarded=False) -> list[str] | None:
     try:
         find_row_by_label(ws, "流动资产合计")
         find_row_by_label(ws, "流动负债合计")
     except ValueError:
         return None
-    return [
-        f"={cell_ref(ws, '流动资产合计', year, same_sheet=True)}-{cell_ref(ws, '流动负债合计', year, same_sheet=True)}"
-        for year in hist
-    ]
+    result = []
+    for year in hist:
+        ca = cell_ref(ws, "流动资产合计", year, same_sheet=True)
+        cl = cell_ref(ws, "流动负债合计", year, same_sheet=True)
+        result.append(f'=IF(AND(ISNUMBER({ca}),ISNUMBER({cl})),{ca}-{cl},"-")' if guarded else f"={ca}-{cl}")
+    return result
 
 
-def _write_market(ws, row: int, market: dict, as_of) -> int:
+def _write_market(ws, row: int, market: dict, as_of, *, facts=None) -> int:
     written: dict[str, int] = {}
     for key in MARKET_ROWS:
-        label = fs_label(key)
+        label = subject_label(facts, key) if facts else fs_label(key)
         if key == "总市值_亿":
             price_row = written.get("当前股价")
             share_row = written.get("当前总股本_百万股")
@@ -1446,6 +1445,10 @@ def _write_market(ws, row: int, market: dict, as_of) -> int:
         ws.cell(row=row, column=1, value=label)
         ws.cell(row=row, column=2, value=value)
         written[key] = row
+        row += 1
+    if facts and is_foreign(facts) and market.get("每交易单位普通股数") not in (None, 1):
+        ws.cell(row, 1, "每交易单位普通股数")
+        ws.cell(row, 2, market["每交易单位普通股数"])
         row += 1
     return row
 
@@ -1485,7 +1488,59 @@ def _pcol(periods: list[str], year: str) -> int:
     return 2 + periods.index(year)
 
 
-def consensus_median_formula(first_inst: int, last_inst: int, col: str) -> str | None:
+def consensus_median_formula(first_inst: int, last_inst: int, col: str, *, guarded=False) -> str | None:
     if last_inst < first_inst:
         return None
-    return f"=MEDIAN({col}{first_inst}:{col}{last_inst})"
+    span = f"{col}{first_inst}:{col}{last_inst}"
+    return f'=IF(COUNT({span})>0,MEDIAN({span}),"-")' if guarded else f"=MEDIAN({span})"
+
+
+def _format_market_numbers(ws, facts, blocks):
+    """同模板处理港美长标签、EPS 精度和税费比率，A股保持原样。"""
+    if not is_foreign(facts):
+        return
+    _fit_market_labels(ws, [c for c, _, _ in blocks])
+    for label_col, first, last in blocks:
+        for row in range(2, ws.max_row+1):
+            name = str(ws.cell(row, label_col).value or "")
+            fmt = ("0.0000;[Red](0.0000);0.0000" if "每股收益" in name or name.startswith("EPS_") else
+                   choose_number_format("有效税率") if name == "税费/税前利润" else None)
+            if fmt:
+                for col in range(first, last+1):
+                    cell = ws.cell(row, col)
+                    if cell.value is not None:
+                        cell.number_format = fmt
+
+
+def _wrap_note_block(ws, first_row, last_row, note_col, text):
+    """长说明沿用备注列，在对应行组内换行，避免撑出额外列。"""
+    for r in range(first_row, last_row+1):
+        ws.cell(r, note_col).value = None
+    write_note(ws, first_row, note_col, text)
+    if last_row > first_row:
+        ws.merge_cells(start_row=first_row, end_row=last_row, start_column=note_col, end_column=note_col)
+    cell = ws.cell(first_row, note_col)
+    cell.alignment = Alignment(wrap_text=True, vertical="top")
+    width = 36 if ws.title == "运营成本预测" else 12
+    count = last_row-first_row+1
+    height = _wrapped_height(str(text), width=width, min_h=count*22, max_h=count*409)
+    for r in range(first_row, last_row+1):
+        ws.row_dimensions[r].height = max(ws.row_dimensions[r].height or 22, math.ceil(height/count))
+
+
+def _fit_market_labels(ws, columns):
+    for col in columns:
+        width = ws.column_dimensions[get_column_letter(col)].width or 13
+        for row in range(2, ws.max_row+1):
+            cell = ws.cell(row, col)
+            if not isinstance(cell.value, str) or cell.value.startswith("="):
+                continue
+            if any(m.min_col == col and m.min_row <= row <= m.max_row and m.max_col > col
+                   for m in ws.merged_cells.ranges):
+                continue
+            units = sum(2 if ord(c)>127 else 1 for c in cell.value)
+            if units > width:
+                alignment = copy(cell.alignment); alignment.wrap_text = True
+                cell.alignment = alignment
+                height = math.ceil(units/max(8, width-1))*16+6
+                ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 22, height)

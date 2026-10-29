@@ -32,6 +32,9 @@ _AMOUNT_FROM = {
 
 
 def hist_cost_track(facts: dict) -> dict:
+    from valuation.shared.markets import is_foreign
+    if is_foreign(facts):
+        return foreign_hist_track(facts)
     hist = [str(year) for year in (facts.get("hist_periods") or [])]
     income = facts.get("income") or {}
     notes: list[str] = []
@@ -117,7 +120,19 @@ def normalize_cost(raw: dict, facts: dict) -> dict:
         "forecast_periods": fcst,
         "sources": _copy_sources(raw.get("sources") or []),
     }
-    for key in FORECAST_KEYS:
+    from valuation.shared.markets import is_foreign, forecast_keys
+    keys = sum(forecast_keys(facts, raw), ()) if is_foreign(facts) else FORECAST_KEYS
+    if is_foreign(facts):
+        # 旧合并调整不能被丢弃；须先迁移为有来源的实际收支项目。
+        for key in ("pretax_adjustment", "common_adjustment"):
+            if any(_is_number(v) and float(v) != 0 for v in (raw.get(key) or {}).values()):
+                raise SchemaError([f"旧字段 {key} 需改为实际收支明细，不能静默忽略"])
+        if raw.get("forecast_shares"):
+            from valuation.shared.markets import snapshot_ordinary_shares
+            shares = snapshot_ordinary_shares(facts)
+            if any(not _is_number(v) or abs(float(v)-shares) > 1e-6 for v in raw["forecast_shares"].values()):
+                raise SchemaError(["预测股数已改为引用财务快照；旧独立股数假设需先核对"])
+    for key in keys:
         series = raw.get(key)
         if not isinstance(series, dict):
             out[key] = {}
@@ -132,6 +147,9 @@ def normalize_cost(raw: dict, facts: dict) -> dict:
 
 
 def validate_cost(payload: dict, facts: dict) -> list[str]:
+    from valuation.shared.markets import is_foreign
+    if is_foreign(facts):
+        return validate_foreign_cost(payload, facts)
     errors: list[str] = []
     hist = {str(year) for year in (facts.get("hist_periods") or [])}
     fcst = [str(year) for year in (facts.get("forecast_periods") or [])]
@@ -218,3 +236,69 @@ def _is_number(value: Any) -> bool:
     except (TypeError, ValueError):
         return False
     return True
+
+
+def foreign_hist_track(facts: dict) -> dict:
+    from valuation.shared.markets import forecast_keys, expenses, at, safe_ratio, PROFIT_ITEMS
+    hist = facts["hist_periods"]
+    keys = sum(forecast_keys(facts), ())
+    track = {key: {} for key in keys}
+    track.update(hist_periods=hist, notes=list(facts.get("notes", {}).get("profit_checks", [])))
+    for i, year in enumerate(hist):
+        rev = at(facts, "营业收入", i)
+        mapping = [("gross_margin", "毛利", rev),
+                   ("tax_rate", "所得税费用", at(facts, "税前利润", i)),
+                   ("minority", "少数股东损益", at(facts, "净利润", i))]
+        mapping.extend((ratio, key, rev) for key, ratio in expenses(facts))
+        for ratio, key, den in mapping:
+            value = safe_ratio(at(facts, key, i), den)
+            if value is not None:
+                track[ratio][year] = value
+        for key, (name, _, _) in PROFIT_ITEMS.items():
+            value = at(facts, name, i)
+            if value is not None:
+                track.setdefault(key, {})[year] = value
+        # 差额只作为待解释的历史关系，不当作已披露科目或自动预测值。
+        track.setdefault("profit_levels", {})[year] = {
+            key: at(facts, key, i) for key in ("营业收入", "毛利", "营业利润", "税前利润", "所得税费用", "净利润", "归母净利润", "少数股东损益", "EPS")}
+    track["notes"].append("历史税费/税前利润仅为描述性比率；未来税率及利润衔接项需有明确依据，不能为凑平历史而补造科目。")
+    return track
+
+
+def validate_foreign_cost(payload: dict, facts: dict) -> list[str]:
+    from valuation.shared.markets import forecast_keys, number, snapshot_ordinary_shares
+    errors = []
+    ratios, amounts = forecast_keys(facts, payload)
+    for key in ratios + amounts:
+        series = payload.get(key) or {}
+        if not isinstance(series, dict):
+            errors.append(f"{key} 须按年写数字")
+            continue
+        for year in facts["forecast_periods"]:
+            value = series.get(year)
+            if not number(value):
+                errors.append(f"{key}.{year} 缺少有限数字")
+            elif key in {"sales_ratio", "admin_ratio", "sga_ratio", "rd_ratio"} and not 0 <= value <= 1:
+                errors.append(f"{key}.{year} 须为 0–1 的小数")
+            elif key == "gross_margin" and not -.5 <= value <= 1:
+                errors.append(f"{key}.{year} 毛利率范围异常")
+        if set(series) & set(facts["hist_periods"]):
+            errors.append(f"{key} 不得改写历史年")
+    from valuation.shared.markets import at, expenses, PROFIT_ITEMS
+    for i, year in enumerate(facts["hist_periods"]):
+        op, pre, gp = at(facts, "营业利润", i), at(facts, "税前利润", i), at(facts, "毛利", i)
+        if op is not None and pre is not None and abs(pre-op) > .02 and not any(
+                payload.get(key) for key, (_, stage, _) in PROFIT_ITEMS.items() if stage == "pretax"):
+            errors.append(f"{year} 已有营业利润与税前利润差异，须提供有依据的财务及其他非经营收支预测")
+        fees = [at(facts, name, i) for name, _ in expenses(facts)
+                if name != "研发费用" or not (facts.get("rd_in_admin") or facts.get("rd_in_sga"))]
+        other = at(facts, "其他经营净收益", i) or 0
+        if op is not None and gp is not None and all(v is not None for v in fees) and abs(op-gp+sum(fees)-other) > .02 and not payload.get("other_op"):
+            errors.append(f"{year} 毛利与费用尚未解释全部营业利润，须明确其他经营收支假设")
+    if not str(payload.get("rationale") or "").strip():
+        errors.append("rationale 为空，须说明税费及实际收支预测依据")
+    try:
+        snapshot_ordinary_shares(facts)
+    except ValueError as exc:
+        errors.append(str(exc))
+    return errors

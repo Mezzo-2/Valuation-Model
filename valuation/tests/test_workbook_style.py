@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from openpyxl import Workbook
+from openpyxl.styles import Alignment, PatternFill
 
 from valuation.workbook.anchors import cell_ref, find_row_by_label
 from valuation.workbook.build import _cost
@@ -120,6 +121,26 @@ class HeaderStyleTests(unittest.TestCase):
 
 
 class ValueRoleTests(unittest.TestCase):
+    def test_missing_markers_align_like_numbers_and_preserve_zero_and_prose(self):
+        reset_style_marks()
+        ws = Workbook().active
+        ws["A1"], ws["B1"], ws["C1"] = "—", "–", "-"
+        ws["A1"].fill = PatternFill("solid",fgColor=NEAR)
+        ws["D1"] = '=IF(COUNT(A2:A3)>0,MEDIAN(A2:A3),"—")'
+        ws["D1"].alignment = Alignment(horizontal="left",wrap_text=True)
+        ws["E1"] = 0
+        ws["F1"] = "2026—2028年"
+        finish_sheet(ws)
+        for address in ["A1","B1","C1","D1"]:
+            self.assertEqual(ws[address].alignment.horizontal,"right")
+            self.assertEqual(ws[address].alignment.indent,0)
+            self.assertEqual(ws[address].font.name,ws["E1"].font.name)
+            self.assertEqual(ws[address].font.size,ws["E1"].font.size)
+        self.assertEqual([ws[a].value for a in ["A1","B1","C1"]],["-"]*3)
+        self.assertIn(',"-")',ws["D1"].value)
+        self.assertEqual(ws["E1"].value,0)
+        self.assertEqual(ws["F1"].value,"2026—2028年")
+
     def test_formula_role_color(self):
         self.assertEqual(formula_role_color("=B2*2"), FORMULA_BLACK)
         self.assertEqual(formula_role_color("=利润表预测!B4"), CROSS_GREEN)

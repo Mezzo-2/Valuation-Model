@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from copy import copy
 from datetime import date, datetime
 
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -581,4 +582,17 @@ def finish_sheet(ws: Worksheet) -> None:
     apply_value_roles(ws)
     apply_row_heights(ws)
     center_cell_alignment(ws)
+    for row in ws:
+        for cell in row:
+            value = cell.value
+            if value in ("-", "—", "–"):
+                cell.value = "-"
+            elif isinstance(value, str) and value.startswith("=") and any(f'"{dash}"' in value for dash in ("-", "—", "–")):
+                cell.value = value.replace('"—"', '"-"').replace('"–"', '"-"')
+            else:
+                continue
+            font, alignment = copy(cell.font), copy(cell.alignment)
+            font.name, font.size = NUMBER_FONT, NUMBER_SIZE
+            alignment.horizontal, alignment.vertical, alignment.indent = "right", "center", 0
+            cell.font, cell.alignment = font, alignment
     ws.sheet_view.showGridLines = False

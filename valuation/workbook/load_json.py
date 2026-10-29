@@ -39,6 +39,10 @@ def load_spec(run_dir: Path, *, require_notes: bool = False) -> dict:
         raise SystemExit("预测卡没有方法：" + "、".join(empty_method))
     split = adapt_split(split_notes, facts, forecasts)
     cost = load_json(root / "cost_assumptions.json")
+    from valuation.shared.markets import is_foreign
+    if is_foreign(facts):
+        from valuation.operating_cost.schema import require_cost
+        cost = require_cost(cost, facts)
     comps = load_json(root / "comps_spec.json")
     info_path = root / "company_info.json"
     spec = {

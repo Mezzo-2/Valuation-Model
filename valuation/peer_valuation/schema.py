@@ -13,6 +13,11 @@ CORE_MIN = 4
 def require_comps(payload: dict, facts: dict, filled: list[dict] | None = None) -> dict:
     canonical = normalize_comps(payload, facts, filled)
     errors = validate_comps(canonical)
+    from valuation.shared.markets import validate_pe_basis
+    try:
+        validate_pe_basis(facts, canonical)
+    except ValueError as exc:
+        errors.append(str(exc))
     if errors:
         raise SchemaError(errors)
     return canonical
@@ -85,6 +90,10 @@ def _norm_core(raw: Any, filled: dict[str, dict]) -> dict:
         "mcap": src.get("mcap") if src else raw.get("mcap"),
         "currency": src.get("currency") if src else raw.get("currency"),
         "note": str(raw.get("note") or raw.get("why") or "").strip(),
+        "eps_scope": (src or raw).get("eps_scope"),
+        "forecast_period": (src or raw).get("forecast_period"),
+        "pe_source": (src or raw).get("pe_source"),
+        "basis_gap": (src or raw).get("basis_gap"),
     }
 
 
