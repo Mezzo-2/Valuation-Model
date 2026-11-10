@@ -1,0 +1,1847 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自选 · 瑞芯微 603893.SH</title>
+<style>
+  :root {
+    --nav: #0d1633;
+    --blue: #3964e5;
+    --ink: #181818;
+    --heading: #212533;
+    --muted: #888;
+    --sub: #565960;
+    --line: #f0f1f3;
+    --bg: #eff2f8;
+    --up: #de383b;
+    --down: #01947b;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--nav);
+    color: var(--ink);
+    font: 14px "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  }
+  button, input { font: inherit; }
+  button { color: inherit; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .link { color: var(--blue); white-space: nowrap; }
+  .icon { width: 16px; height: 16px; flex: none; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  .icon.small { width: 12px; height: 12px; }
+  .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+  .app {
+    display: grid;
+    grid-template-columns: 65px minmax(0, 1fr);
+    grid-template-rows: 52px minmax(0, 1fr);
+    min-width: 1200px;
+    height: 100%;
+  }
+  .top {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 60px;
+    padding: 0 17px 0 12px;
+    color: #fff;
+  }
+  .brand { display: flex; align-items: center; gap: 4px; color: #ed702d; font-size: 23px; font-weight: 700; white-space: nowrap; }
+  .brand svg { width: 33px; height: 28px; }
+  .search {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: clamp(160px, 22vw, 360px);
+    height: 32px;
+    padding: 0 8px 0 12px;
+    border-radius: 4px;
+    background: #3e476d;
+    color: #c4c9dd;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .search > span, .top-tools > span { display: inline-flex; align-items: center; gap: 5px; }
+  .search .search-action { color: #fff; }
+  .ai-mark { border-radius: 50%; background: linear-gradient(135deg,#100e2b 45%,#655aca 75%,#a7c9fd); color: #fff; display: inline-grid; place-items: center; width: 15px; height: 12px; font-size: 8px; font-style: normal; font-weight: 700; }
+  .top-tools { display: flex; align-items: center; gap: clamp(10px, 1.45vw, 24px); margin-left: auto; white-space: nowrap; }
+  .top-tools .tool-icon { width: 20px; height: 20px; padding: 3px; border-radius: 4px; background: linear-gradient(140deg, var(--glow), var(--tile)); box-shadow: inset 0 0 3px #ffffff80; }
+  .top-tools .separator { height: 16px; border-left: 1px solid #ffffff26; }
+  .top-tools .member { color: #744b24; background: linear-gradient(120deg,#fff2c1,#e5b27d,#fff1d2); padding: 2px 7px; border-radius: 2px 8px 8px 2px; font-size: 11px; font-weight: 700; }
+  .account { position: relative; width: 28px; height: 28px; border-radius: 50%; background: #9fa6b9; overflow: hidden; }
+  .account .icon { width: 28px; height: 28px; fill: #eee; stroke: #eee; }
+  .rail { color: #fff; overflow: auto; scrollbar-width: none; }
+  .rail nav { display: grid; gap: 4px; padding: 10px 8px 0; }
+  .rail-item { position: relative; display: grid; justify-items: center; align-content: center; gap: 5px; height: 51px; border-radius: 4px; font-size: 10px; }
+  .rail-item:first-child { margin-bottom: 8px; }
+  .rail-item.on { background: linear-gradient(145deg,#5676ea,#3760e2); }
+  .rail-item .ribbon { position: absolute; top: -9px; right: -6px; padding: 1px 5px; background: #e85435; border-radius: 2px; font-size: 10px; transform: rotate(-5deg); }
+
+  .work {
+    display: grid;
+    grid-template-columns: 288px minmax(0, 1fr);
+    gap: 12px;
+    min-height: 0;
+    padding: 12px;
+    border-radius: 8px 0 0 4px;
+    background: var(--bg);
+  }
+  .watch {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px 16px;
+    border: 1px solid #fff;
+    border-radius: 4px;
+    background: linear-gradient(#3964e51f, #fff0 11.51%), #fff;
+  }
+  .wtabs { display: flex; height: 32px; flex: none; align-items: stretch; }
+  .wtabs > span { flex: 1; display: grid; place-items: center; border-radius: 4px; }
+  .wtabs .on { color: var(--blue); font-weight: 600; background: #3964e50a; }
+  .wsearch { margin-top: 12px; display: flex; flex: none; align-items: center; height: 32px; padding: 0 8px; gap: 6px; border: 1px solid #e5e6eb; border-radius: 4px; background: #fff; color: #b9bbc0; }
+  .wsearch input { padding: 0; border: 0; outline: 0; width: 100%; color: var(--sub); background: transparent; }
+  .wfilters { height: 32px; flex: none; margin: 8px 0; display: flex; align-items: center; gap: 16px; }
+  .wfilters .on { height: 100%; display: grid; align-items: center; color: var(--blue); font-weight: 600; box-shadow: inset 0 -2px var(--blue); }
+  .wfilter-icons { display: flex; align-items: center; gap: 8px; margin-left: auto; color: var(--sub); }
+  .wcols, .wrow { display: grid; grid-template-columns: minmax(0, 1fr) 66px 72px; align-items: start; padding-inline: 16px; }
+  .wcols { height: 40px; flex: none; align-items: center; border-radius: 4px; background: #f6f6f6; font-size: 13px; }
+  .wcols span:not(:first-child), .px, .pct { text-align: right; }
+  .sort { color: #bfc0c3; font-size: 10px; }
+  .wlist { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; }
+  .group { height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 600; }
+  .group small { font-size: 12px; font-weight: 400; }
+  .wrow { min-height: 52.5px; padding-block: 8px; box-shadow: inset 0 -1px #f7f7f8; line-height: 20px; }
+  .wrow.on { background: #ebeffc; }
+  .wrow.on .wname { color: var(--blue); }
+  .wname { font-weight: 600; }
+  .wcode, .subpx { color: var(--muted); font-size: 11px; line-height: 16px; }
+  .empty { color: #b9bbc0; }
+  .wfoot { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+  .wfoot button, .follow { height: 32px; border: 1px solid var(--blue); color: var(--blue); background: transparent; border-radius: 4px; padding: 0 8px; white-space: nowrap; }
+
+  .detail { position: relative; min-width: 0; min-height: 0; }
+  .main { height: 100%; overflow: auto; scrollbar-width: none; }
+  .card { background: #fff; border-radius: 4px; }
+  .quote {
+    min-height: 175px;
+    padding: 15px 20px;
+    border: 1px solid #fff9;
+    background: radial-gradient(ellipse at 13% 0%, #dbe3fa85, transparent 65%), linear-gradient(158deg, #e6ebf8, #ecedf8 65%, #f1f2f9);
+    margin-bottom: 12px;
+  }
+  .q1, .identity, .price, .meta, .fin, .depth, .tracking { display: flex; align-items: center; }
+  .q1 { min-height: 32px; gap: 8px 22px; flex-wrap: wrap; white-space: nowrap; }
+  .identity { gap: 8px; }
+  .mark { width: 32px; height: 32px; display: grid; place-items: center; margin-right: 4px; border-radius: 50%; background: #ffffff9c; color: #102855; font: italic 700 6px Arial,sans-serif; }
+  .qname { font-size: 20px; font-weight: 600; }
+  .qcode, .qytd, .qtime { color: var(--muted); font-size: 12px; }
+  .price { gap: 4px; color: var(--down); font-size: 21px; font-weight: 600; }
+  .price .currency { font-size: 12px; font-weight: 700; }
+  .price .change { font-size: 17px; margin-left: 16px; }
+  .info { color: #697080; }
+  .qytd b { margin-left: 5px; }
+  .quote-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; white-space: nowrap; }
+  .qbody { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 7px 16px; margin-top: 16px; }
+  .overview-info { border-bottom: 1px solid #ffffff80; padding-bottom: 7px; }
+  .meta, .fin, .depth, .tracking { gap: 0 12px; min-height: 24px; color: var(--sub); font-size: 12px; flex-wrap: wrap; }
+  .meta { gap: 0 32px; margin-bottom: 8px; }
+  .meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .meta .topic { color: var(--ink); }
+  .fin { gap: 0 18px; }
+  .fin b, .depth b, .tracking b { font-weight: 600; }
+  .fin b, .depth b:not(.up,.down), .tracking b { color: var(--ink); }
+  .unit { margin-left: 2px; color: var(--sub); }
+  .tag-plus { margin-left: 8px; padding: 0 3px; border-radius: 2px; background: #dfe6ff; color: var(--blue); font-size: 10px; }
+  .market { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 40px; }
+  .depth { gap: 0 10px; }
+  .tracking { gap: 10px; }
+  .faces { display: flex; }
+  .faces > i { display: block; position: relative; width: 24px; height: 24px; margin-left: -2px; overflow: hidden; border: 1px solid #edf1f9; border-radius: 50%; background: var(--portrait); }
+  .faces > i::before { content: ""; position: absolute; left: 7px; top: 3px; width: 8px; height: 11px; border-radius: 45%; background: #edbca1; box-shadow: 0 -2px 0 1px #343341; }
+  .faces > i::after { content: ""; position: absolute; inset: 13px 3px -7px; border-radius: 45% 45% 0 0; background: var(--jacket,#26304b); }
+  .heat { padding-left: 16px; border-left: 1px solid #e4e7f1; }
+  .heat-h { display: flex; justify-content: space-between; align-items: center; font-size: 12px; white-space: nowrap; }
+  .heat svg.spark { display: block; width: 100%; height: 40px; margin-top: 6px; }
+
+  .review-card { margin-bottom: 12px; padding: 8px 24px 20px; }
+  .tabs, .subtabs { display: flex; align-items: center; gap: 28px; height: 48px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .tabs > span, .subtabs > span { height: 100%; display: inline-flex; align-items: center; position: relative; }
+  .tabs .on, .subtabs .on { color: var(--blue); font-weight: 700; }
+  .tabs .on::after, .subtabs .on::after { content: ""; position: absolute; inset: auto 0 0; height: 3px; border-radius: 4px 4px 0 0; background: var(--blue); }
+  .tabs .ai-pills { margin-left: 12px; }
+  .ai-pills { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 4px 5px 4px 8px; border-radius: 8px; background: linear-gradient(105deg,#eee7fc,#e9f0ff); color: var(--heading); font-size: 12px; font-weight: 400; white-space: nowrap; }
+  .ai-pills > span { padding: 3px 6px; margin-left: 4px; border-radius: 4px; background: #ffffffd9; }
+  .review { padding: 20px 2px 0 0; }
+  h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 700; color: var(--heading); }
+  .kbar { display: flex; align-items: center; gap: 16px; height: 24px; margin: 8px 0 12px; color: #333; white-space: nowrap; }
+  .kbar .adjust { padding-left: 9px; margin-left: -9px; border-left: 1px solid var(--line); }
+  .kbar .fullscreen { margin-left: auto; margin-right: 8px; }
+  #chart { display: block; width: 100%; height: 397px; }
+
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) 332px; padding: 20px 24px; }
+  .dyn { min-width: 0; padding-right: 24px; }
+  .dyn-h, .earn-h { display: flex; align-items: center; gap: 12px; }
+  .earn-h { gap: 8px; }
+  .earn-h > .link { margin-left: auto; }
+  .valuation-trigger { height: 28px; padding: 0 8px; border: 1px solid var(--blue); border-radius: 4px; background: transparent; color: var(--blue); font-size: 12px; white-space: nowrap; cursor: pointer; }
+  .quote-actions .valuation-trigger { height: 32px; border-color: transparent; font-size: 14px; }
+  .valuation-trigger:hover { background: #3964e50f; }
+  .subtabs .filter { margin-left: auto; color: var(--muted); }
+  .side-col { border-left: 1px solid var(--line); padding-left: 24px; }
+  .item { padding: 9px 0; }
+  .item-h { display: flex; align-items: start; justify-content: space-between; gap: 12px; line-height: 22px; }
+  .item-h h3 { font-size: 14px; margin: 0; }
+  .signal-icon { display: inline-grid; place-items: center; margin-right: 6px; width: 16px; height: 16px; border-radius: 4px; background: #f88040; color: #fff; font-size: 12px; }
+  .item time { color: var(--sub); font-size: 12px; white-space: nowrap; }
+  .badges { display: flex; align-items: center; gap: 6px; margin: 6px 0 8px; color: var(--sub); font-size: 12px; }
+  .sector, .rating, .stock-tag { border-radius: 2px; background: #f1f3fa; padding: 2px 4px; }
+  .sector { border: 1px solid var(--line); background: #fff; padding: 0 4px 0 0; }
+  .positive { color: var(--up); background: #fcefed; margin-right: 4px; padding: 0 3px; }
+  .item-body { border-radius: 2px; background: #f7f8fa; padding: 8px; }
+  .item-body p { margin: 0 0 8px; line-height: 22px; }
+  .related { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px; font-size: 12px; color: var(--sub); }
+  .stock-tag { color: var(--ink); }
+  .stock-tag .exchange { color: var(--muted); }
+  .sources { margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; background: linear-gradient(120deg,#f4f6fe,#fff 45%); }
+  .source-h { display: flex; justify-content: space-between; color: var(--sub); margin-bottom: 4px; }
+  .source-row { display: grid; grid-template-columns: 80px 80px 1fr; gap: 0; line-height: 28px; }
+  .source-row + .source-row { border-top: 1px solid var(--line); }
+  .year { margin-top: 16px; padding: 8px 10px; background: linear-gradient(100deg,#fafbff,#eff1fb); border-radius: 4px; font-size: 12px; }
+  .report { margin-top: 12px; background: #f8f9fc; padding: 8px 12px; font-size: 12px; }
+  .report-line, .metric { display: flex; justify-content: space-between; }
+  .report-line + .report-line { justify-content: flex-start; gap: 14px; margin-top: 12px; }
+  .report time, .act-item small { color: var(--sub); }
+  .metric { line-height: 24px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+  .metric .value { text-align: right; }
+  .more-link { display: block; margin: 12px 0 24px; padding: 8px; border: 1px solid var(--line); text-align: center; border-radius: 4px; }
+  .act-filters { display: flex; align-items: center; gap: 12px; margin: 16px 0 10px; font-size: 13px; }
+  .act-filters span + span { border-left: 1px solid var(--line); padding-left: 10px; }
+  .act-filters .icon { margin-left: auto; color: var(--muted); }
+  .act-item { padding: 12px 0; border-bottom: 1px solid var(--line); font-weight: 600; }
+  .act-item small { display: block; margin-top: 8px; font-weight: 400; }
+  .compact { position: absolute; inset: 0 0 auto; display: flex; align-items: center; gap: 20px; height: 64px; padding: 0 20px; border-radius: 4px; background: #e9edf9; box-shadow: 0 1px 4px #0d163314; }
+  .compact[hidden] { display: none; }
+  .compact .mark { width: 24px; height: 24px; }
+  .compact .tabs { height: 100%; border: 0; margin-left: 32px; }
+  .compact .down { font-weight: 600; }
+  .support { position: fixed; right: -1px; bottom: 40px; width: 28px; height: 32px; display: grid; place-items: center; background: #9caef3; border-radius: 16px 0 0 16px; color: #fff; }
+
+  .valuation-dialog { width: min(560px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 10px; background: #fff; color: var(--heading); box-shadow: 0 20px 64px #0d163340; }
+  .valuation-dialog[open], .valuation-shell, .valuation-view { display: flex; flex-direction: column; min-height: 0; }
+  .valuation-shell, .valuation-view { flex: 1; }
+  .valuation-shell { overflow: hidden; }
+  .valuation-dialog [hidden] { display: none !important; }
+  .valuation-dialog::backdrop { background: #0d16335c; }
+  .valuation-dialog[data-view="progress"] { width: min(640px, calc(100vw - 32px)); }
+  .valuation-dialog[data-view="result"] { width: min(1440px, calc(100vw - 48px)); height: calc(100dvh - 64px); }
+  .valuation-dialog[data-expanded="true"] { width: calc(100vw - 20px); height: calc(100dvh - 20px); max-height: none; }
+  .valuation-heading, .valuation-footer, .valuation-toolbar, .valuation-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .valuation-heading { flex: none; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid var(--line); }
+  .valuation-heading h2 { font-size: 19px; }
+  .valuation-heading p { margin: 3px 0 0; color: var(--sub); font-size: 13px; }
+  .valuation-dialog[data-view="start"] .valuation-heading p { display: none; }
+  .valuation-badge { background: #eef2ff; color: #3556be; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+  .valuation-icon-button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 4px; background: transparent; font-size: 21px; cursor: pointer; }
+  .valuation-icon-button:hover { background: var(--bg); }
+  .valuation-body { overflow: auto; padding: 21px 24px; }
+  .valuation-start-body { display: grid; gap: 18px; }
+  .valuation-stock { display: flex; align-items: center; gap: 10px; }
+  .valuation-stock .mark { width: 42px; height: 42px; margin: 0; background: #eef2fb; }
+  .valuation-stock strong { font-size: 18px; }
+  .valuation-stock small { display: block; margin-top: 2px; color: var(--sub); font-size: 12px; }
+  .valuation-start-body h3 { margin: 0 0 6px; font-size: 13px; }
+  .valuation-copy { margin: 0; color: var(--sub); line-height: 1.65; }
+  .valuation-deliverables { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(175px, 100%), 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .valuation-deliverables li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
+  .valuation-deliverables .icon { margin-top: 3px; color: var(--blue); }
+  .valuation-deliverables small { display: block; margin-top: 2px; color: var(--sub); font-size: 12px; }
+  .valuation-estimates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 1px solid #e1e8f8; border-radius: 7px; background: #f5f8ff; }
+  .valuation-estimates > div { padding: 12px 15px; }
+  .valuation-estimates > div + div { border-left: 1px solid #e1e8f8; }
+  .valuation-estimates dt { display: flex; align-items: center; gap: 6px; color: var(--sub); font-size: 12px; }
+  .valuation-estimates .icon { color: var(--blue); }
+  .valuation-estimates dd { margin: 3px 0 0; color: var(--heading); font-size: 13px; }
+  .valuation-estimates dd strong { font-size: 23px; font-variant-numeric: tabular-nums; }
+  .valuation-footer { flex: none; justify-content: flex-end; padding: 13px 22px; border-top: 1px solid var(--line); }
+  .valuation-start-footer { justify-content: space-between; }
+  .valuation-start-footer p { margin: 0; color: var(--sub); font-size: 12px; }
+  .valuation-start-footer .primary { min-width: 96px; min-height: 36px; margin-left: auto; }
+  .valuation-button { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 5px 12px; border: 1px solid #dce0e9; border-radius: 4px; background: #fff; color: var(--heading); font: inherit; font-size: 13px; text-decoration: none; white-space: nowrap; cursor: pointer; }
+  .valuation-button:hover { background: #f5f7fc; }
+  .valuation-button.primary { border-color: var(--blue); background: var(--blue); color: #fff; }
+  .valuation-button.primary:hover { background: #3056cc; }
+  .valuation-button.cloud { gap: 5px; border-color: #d6def7; color: var(--blue); }
+  .valuation-button.cloud:disabled { border-color: #d8ebe3; background: #eef8f3; color: #00765f; cursor: default; }
+  .valuation-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 13px; color: var(--sub); }
+  .valuation-status strong { color: var(--heading); }
+  .valuation-progress-meter { display: block; width: 100%; height: 7px; accent-color: var(--blue); }
+  .valuation-stages { display: grid; gap: 4px; margin: 13px 0 0; padding: 0; list-style: none; }
+  .valuation-stages details { padding: 8px 10px; border-radius: 4px; }
+  .valuation-stages li[data-status="running"] details { background: #eff3ff; }
+  .valuation-stages summary { display: flex; align-items: center; gap: 9px; min-height: 22px; list-style: none; cursor: pointer; }
+  .valuation-stages summary::-webkit-details-marker { display: none; }
+  .valuation-stage-icon { display: grid; flex: none; place-items: center; width: 20px; height: 20px; border: 1px solid #d8deeb; border-radius: 50%; color: var(--sub); font-size: 11px; }
+  .valuation-stages li[data-status="done"] .valuation-stage-icon { border-color: #c7e5d9; background: #e8f7f0; color: #00765f; }
+  .valuation-stages li[data-status="running"] .valuation-stage-icon { border-color: var(--blue); background: var(--blue); color: #fff; }
+  .valuation-stage-status { margin-left: auto; color: var(--sub); font-size: 12px; white-space: nowrap; }
+  .valuation-stages details ul { display: grid; gap: 5px; margin: 9px 0 3px 29px; padding: 0; list-style: none; color: var(--sub); font-size: 12px; }
+  .valuation-meta { display: flex; flex: none; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 9px 22px; background: #f7f9fd; font-size: 12px; color: var(--sub); }
+  .valuation-pass { color: #00765f; }
+  .valuation-toolbar { justify-content: space-between; flex: none; padding: 6px 22px; border-block: 1px solid var(--line); }
+  .valuation-product-tab { min-height: 34px; padding: 4px 8px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--sub); font-size: 13px; cursor: pointer; }
+  .valuation-product-tab[aria-pressed="true"] { border-color: var(--blue); color: var(--blue); font-weight: 600; }
+  .valuation-workbook { display: flex; flex: 1; flex-direction: column; min-height: 0; background: #f4f7f6; }
+  .valuation-workbook-bar, .valuation-formula-bar, .valuation-sheet-tabs, .valuation-workbook-status { display: flex; align-items: center; gap: 8px; flex: none; }
+  .valuation-workbook-bar { padding: 7px 15px; background: #1d6f42; color: #fff; font-size: 13px; }
+  .valuation-workbook-bar small { margin-left: auto; }
+  .valuation-formula-bar { padding: 5px 12px; border-bottom: 1px solid #dce4e0; font-size: 12px; }
+  .valuation-cell-address { min-width: 52px; padding: 3px 7px; border: 1px solid #d9e1dd; background: #fff; text-align: center; }
+  .valuation-formula-bar output { flex: 1; min-width: 0; overflow: hidden; padding: 3px 8px; border: 1px solid #d9e1dd; background: #fff; white-space: nowrap; text-overflow: ellipsis; font-family: ui-monospace, monospace; }
+  .valuation-grid { flex: 1; min-height: 0; overflow: auto; background: #fff; }
+  .valuation-grid table { width: 100%; border-spacing: 0; table-layout: fixed; color: #152033; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .valuation-grid th, .valuation-grid td { border: solid #dce4e0; border-width: 0 1px 1px 0; }
+  .valuation-grid th { background: #eff3f0; color: #56645e; font-weight: 500; text-align: center; }
+  .valuation-grid thead th { position: sticky; top: 0; z-index: 1; height: 24px; }
+  .valuation-grid tbody th { position: sticky; left: 0; }
+  .valuation-grid td { position: relative; padding: 3px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+  .valuation-grid td[data-cell].selected { box-shadow: inset 0 0 0 2px #1d6f42; }
+  .valuation-sheet-tabs { overflow: auto; gap: 0; padding: 0 10px; border-top: 1px solid #dce4e0; }
+  .valuation-sheet-tab { flex: none; min-height: 30px; padding: 4px 12px; border: solid transparent; border-width: 0 1px 2px; background: transparent; color: #394940; font-size: 12px; cursor: pointer; }
+  .valuation-sheet-tab[aria-pressed="true"] { border-color: #dce4e0 #dce4e0 #1d6f42; background: #fff; color: #1d6f42; font-weight: 600; }
+  .valuation-workbook-status { justify-content: space-between; padding: 4px 12px; border-top: 1px solid #dce4e0; color: #56645e; font-size: 11px; }
+  .valuation-dossier { display: grid; flex: 1; min-height: 0; min-width: 0; grid-template-columns: clamp(180px, 18vw, 248px) minmax(0, 1fr); }
+  .valuation-dossier-nav { min-height: 0; overflow: auto; padding: 20px 12px; border-right: 1px solid var(--line); background: #f7f9fd; }
+  .valuation-dossier-nav > strong { display: block; margin: 0 8px 10px; color: var(--heading); font-size: 13px; }
+  .valuation-dossier-nav ol { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+  .valuation-dossier-nav button { display: block; width: 100%; padding: 7px 8px; border: 0; border-radius: 4px; background: transparent; text-align: left; color: var(--sub); font-size: 13px; line-height: 1.5; cursor: pointer; }
+  .valuation-dossier-nav button:hover, .valuation-dossier-nav button:focus-visible { background: #eaf0ff; color: var(--blue); }
+  .valuation-dossier-page { position: relative; min-width: 0; min-height: 0; overflow: auto; padding: 24px clamp(16px, 3vw, 40px) 36px; overflow-wrap: anywhere; }
+  .valuation-dossier-page header { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .valuation-dossier-page h3 { margin: 0; font-size: 20px; }
+  .valuation-dossier-chapter { padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .valuation-dossier-chapter h4 { margin: 0; font-size: 15px; }
+  .valuation-dossier p { margin: 8px 0 0; color: var(--sub); line-height: 1.8; }
+  @media (max-width: 680px) {
+    .valuation-dialog[data-view="result"] { width: calc(100vw - 20px); height: calc(100dvh - 20px); max-height: none; }
+    .valuation-heading, .valuation-body, .valuation-footer, .valuation-meta, .valuation-toolbar { padding-inline: 12px; }
+    .valuation-dossier { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+    .valuation-dossier-nav { padding: 6px 8px; border-right: 0; border-bottom: 1px solid var(--line); }
+    .valuation-dossier-nav > strong { margin-bottom: 3px; }
+    .valuation-dossier-nav ol { display: flex; }
+    .valuation-dossier-nav li { flex: none; }
+  }
+
+  @media (max-width: 1400px) {
+    .top { gap: 28px; }
+    .search { width: 200px; }
+    .top-tools { gap: 12px; }
+    .q1, .compact { column-gap: 12px; }
+    .compact .tabs { gap: 14px; margin-left: 8px; }
+    .split { grid-template-columns: minmax(0, 1fr) 285px; }
+    .subtabs { gap: 14px; }
+  }
+</style>
+</head>
+<body>
+<svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.4 10.4 3 3"/></symbol>
+  <symbol id="i-video" viewBox="0 0 16 16"><rect x="2" y="4" width="9" height="8" rx="1.4"/><path d="m11 7 3-2v6l-3-2"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 16 16"><path d="m3 11-1 3 3-1 8-8-2-2zM9.5 4.5l2 2"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="9" rx="1.4"/><path d="m7 5.5 3 2-3 2zM6 14h4"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 16 16"><rect x="6" y="2" width="4" height="8" rx="2"/><path d="M4 8a4 4 0 0 0 8 0m-4 4v2M6 14h4"/></symbol>
+  <symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="6" r="2.8"/><path d="M2.5 15a5.5 5.5 0 0 1 11 0z"/></symbol>
+  <symbol id="i-translate" viewBox="0 0 16 16"><path d="M2 4h8M6 2v2m2.5 0c-.7 4-2.9 6.8-6 8m1-6a9 9 0 0 0 5 5m1.2 2.5 2.3-6 2.5 6m-4-1.8h3.5"/></symbol>
+  <symbol id="i-more" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.4"/><path d="M5 8h.1M8 8h.1M11 8h.1"/></symbol>
+  <symbol id="i-star" viewBox="0 0 16 16"><path d="m8 1.5 2 4.3 4.7.5-3.4 3.2.9 4.6L8 12l-4.2 2.1.9-4.6-3.4-3.2 4.7-.5z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 16 16"><path d="M2.5 11.5h11c-2-2-1.5-2.5-1.5-5.2a4 4 0 0 0-8 0c0 2.7.5 3.2-1.5 5.2zM6.5 13.5a1.7 1.7 0 0 0 3 0"/></symbol>
+  <symbol id="i-link" viewBox="0 0 16 16"><path d="m6 10 4-4m-1.5-.5L10 4a2 2 0 0 1 3 3l-1.5 1.5m-4 2L6 12a2 2 0 0 1-3-3l1.5-1.5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 16 16"><rect x="3" y="2.5" width="10" height="11" rx="1.4"/><path d="M6 5h4M6 8h4M6 11h2"/></symbol>
+  <symbol id="i-ai" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="m4.7 10 1.8-4 1.8 4M5.4 8.6h2.3M10 6v4M13 3l2-2"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 16 16"><rect x="2" y="2" width="4.5" height="4.5" rx="1"/><rect x="9.5" y="2" width="4.5" height="4.5" rx="1"/><rect x="2" y="9.5" width="4.5" height="4.5" rx="1"/><circle cx="11.8" cy="11.8" r="2.3"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="11" rx="1.4"/><path d="M5.5 2v3M10.5 2v3M5.5 8h5M5.5 11h3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></symbol>
+  <symbol id="i-coins" viewBox="0 0 16 16"><ellipse cx="8" cy="4" rx="5" ry="2"/><path d="M3 4v7.5c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 7.75c0 1.1 2.2 2 5 2s5-.9 5-2"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 13V3h5l2 2h5v5m-8 3H2m7-1 2 2h2l2-2-2-2h-2z"/></symbol>
+  <symbol id="i-watch" viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="currentColor" stroke="none"/><path d="M5 8h6m-3-3v6" stroke="#3964e5"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.4"/><path d="m5 11 2-4 4-2-2 4z"/></symbol>
+  <symbol id="i-report" viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4zm5 0v3h3M6 8h4m-4 3h4M2 4v10"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 16 16"><path d="M2 3h9v6H7l-3 2V9H2zm10 3h2v6h-2v2l-3-2H7v-2"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 16 16"><path d="M2 3.5h12l-4.5 5v4L7 11V8.5z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 16 16"><path d="m2 6 6-3 6 3-6 3zM2 8.5l6 3 6-3M2 11l6 3 6-3"/></symbol>
+  <symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M6.3 6a1.7 1.7 0 1 1 2.4 1.6c-.6.3-.7.6-.7 1.2m0 2.2h.1"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 16 16"><path d="M2 6V2h4m4 0h4v4m0 4v4h-4m-4 0H2v-4"/></symbol>
+  <symbol id="i-headset" viewBox="0 0 16 16"><path d="M2 9V8a6 6 0 0 1 12 0v2c0 2-1 3-4 3m-8-6h2v4H2zm10 0h2v4h-2z"/></symbol>
+</svg>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 36 28" aria-hidden="true"><path d="M1 6c4 .4 6 1.6 8 3L8 2c4 0 7 1 10 2 4 2 6 4 8 7l8-3-3 8c-1 7-8 11-16 10C7 25 3 19 3 13L1 6z" fill="currentColor"/><path d="M5 14c1 5 4 9 10 10m10-5-2 2m-9-7h.1m7 1h.1" fill="none" stroke="#0d1633" stroke-width="2" stroke-linecap="round"/><path d="M16 19q2 2 4 0" fill="none" stroke="#0d1633" stroke-width="1.2"/></svg>进门
+    </div>
+    <div class="search" aria-label="全站搜索">
+      <span>申万宏源 <i class="ai-mark">AI</i></span>
+      <span class="search-action"><svg class="icon small"><use href="#i-search"/></svg>AI搜索</span>
+    </div>
+    <div class="top-tools" aria-label="快捷入口">
+      <span><svg class="icon tool-icon" style="--glow:#95a9ff;--tile:#3d51da"><use href="#i-video"/></svg>会议</span>
+      <span><svg class="icon tool-icon" style="--glow:#c8a5ff;--tile:#744de7"><use href="#i-pen"/></svg>转写</span>
+      <span><svg class="icon tool-icon" style="--glow:#c4e8ff;--tile:#5eaddc"><use href="#i-monitor"/></svg>录会</span>
+      <span><svg class="icon tool-icon" style="--glow:#ffe2b0;--tile:#dc9446"><use href="#i-mic"/></svg>录音</span>
+      <span><svg class="icon tool-icon" style="--glow:#a7c7ff;--tile:#515de9"><use href="#i-user"/></svg>AI分身</span>
+      <span><svg class="icon tool-icon" style="--glow:#b0cdff;--tile:#4d66d9"><use href="#i-translate"/></svg>翻译</span>
+      <span><svg class="icon"><use href="#i-more"/></svg>更多</span>
+      <i class="separator"></i>
+      <span><svg class="icon" aria-label="收藏"><use href="#i-star"/></svg><svg class="icon" aria-label="通知"><use href="#i-bell"/></svg></span>
+      <i class="separator"></i>
+      <span><svg class="icon tool-icon" style="--glow:#b6adff;--tile:#4c62e6"><use href="#i-link"/></svg>进门MCP</span>
+      <span><svg class="icon tool-icon" style="--glow:#ffdfa9;--tile:#d8933b"><use href="#i-list"/></svg>任务</span>
+      <span class="member">◆ 会员</span>
+      <span class="account" aria-label="账户"><svg class="icon"><use href="#i-user"/></svg></span>
+    </div>
+  </header>
+  <aside class="rail">
+    <nav aria-label="主导航">
+      <div class="rail-item"><svg class="icon"><use href="#i-ai"/></svg>AI进宝<small class="ribbon">研究</small></div>
+      <div class="rail-item"><svg class="icon"><use href="#i-apps"/></svg>活动</div>
+      <div class="rail-item"><svg class="icon"><use href="#i-calendar"/></svg>日历</div>
+      <div class="rail-item"><svg class="icon"><use href="#i-folder"/></svg>云文档</div>
+      <div class="rail-item on" aria-current="page"><svg class="icon"><use href="#i-watch"/></svg>自选</div>
+      <div class="rail-item"><svg class="icon"><use href="#i-compass"/></svg>洞察</div>
+      <div class="rail-item"><svg class="icon"><use href="#i-list"/></svg>纪要</div>
+      <div class="rail-item"><svg class="icon"><use href="#i-report"/></svg>研报<small class="ribbon">外资</small></div>
+      <div class="rail-item"><svg class="icon"><use href="#i-pen"/></svg>点评</div>
+      <div class="rail-item"><svg class="icon"><use href="#i-apps"/></svg>社媒</div>
+      <div class="rail-item"><svg class="icon"><use href="#i-chat"/></svg>问答</div>
+      <div class="rail-item"><svg class="icon"><use href="#i-more"/></svg>更多</div>
+    </nav>
+  </aside>
+
+  <div class="work">
+    <aside class="watch" aria-label="自选列表">
+      <div class="wtabs"><span class="on">个股</span><span>行业</span><span>产业链</span></div>
+      <label class="wsearch"><input aria-label="搜索股票" value="立讯精密" readonly><svg class="icon"><use href="#i-search"/></svg></label>
+      <div class="wfilters">
+        <span class="on">全部</span><span>财富密码</span>
+        <span class="wfilter-icons"><svg class="icon"><use href="#i-filter"/></svg>⋯</span>
+      </div>
+      <div class="wcols"><span>名称</span><span>最新价 <i class="sort">↕</i></span><span>涨跌幅 <i class="sort">↕</i></span></div>
+      <div class="wlist">
+        <div class="group">综合概览 <small>（62）</small></div>
+        <div id="watch-rows"></div>
+      </div>
+      <div class="wfoot"><button type="button">批量导入</button><button type="button">公开持仓导入</button></div>
+    </aside>
+    <div class="detail">
+      <main class="main">
+        <section class="card quote" aria-label="瑞芯微行情">
+          <div class="q1">
+            <div class="identity"><span class="mark">Rockchip</span><strong class="qname">瑞芯微</strong><span class="qcode">603893.SH</span></div>
+            <div class="price"><span>212.00</span><span class="currency">CNY</span><span class="change">-0.32%</span><svg class="icon small info"><use href="#i-help"/></svg></div>
+            <span class="qytd">年初至今：<b class="up">+19.80%</b></span>
+            <span class="qtime">收盘 11-09 15:00:00 (北京)</span>
+            <div class="quote-actions">
+              <button class="valuation-trigger" type="button" aria-haspopup="dialog" aria-controls="valuation-model">估值模型</button>
+              <button class="follow" type="button">−自选</button>
+            </div>
+          </div>
+          <div class="qbody">
+            <div class="overview-info">
+              <div class="meta">
+                <span>所属行业： <b class="link"><svg class="icon small"><use href="#i-layers"/></svg> 电子</b></span>
+                <span>关联主题： <i class="ai-mark">#</i><span class="topic">国家大基金持股</span><span class="tag-plus">+30</span></span>
+              </div>
+              <div class="fin">
+                <b>1Q-3Q FY26 财务数据</b>
+                <span>营业收入： <b>44.49</b><span class="unit">亿</span></span>
+                <span>毛利率： <b>46.4</b><span class="unit">%</span></span>
+                <span>归母净利润： <b>13.32</b><span class="unit">亿</span></span>
+                <span>加权平均ROE： <b>27.35</b><span class="unit">%</span></span>
+                <span>货币单位： <b>人民币</b></span>
+              </div>
+            </div>
+            <div class="heat">
+              <div class="heat-h"><b>相对于一级行业热度 <svg class="icon small info"><use href="#i-help"/></svg></b><span class="link">更多 ›</span></div>
+              <svg class="spark" viewBox="0 0 204 40" role="img" aria-label="相对于一级行业热度走势">
+                <path d="M10 20 Q32 19 55 19 H172 Q188 19 200 20" fill="none" stroke="#596be6" stroke-width="1.5"/>
+                <g fill="#73767d" font-size="9" font-weight="600" text-anchor="middle">
+                  <text x="14" y="36">10-09</text><text x="62" y="36">10-17</text><text x="110" y="36">10-25</text><text x="156" y="36">11-02</text>
+                </g>
+              </svg>
+            </div>
+            <div class="market">
+              <div class="depth">
+                <b>盘口</b>
+                <span>最新总市值： <b>897.60</b><span class="unit">亿</span></span>
+                <span>市盈(TTM)： <b>56.36</b></span>
+                <span>市净率： <b>16.41</b></span>
+                <span>委比： <b class="up">22.58%</b></span>
+                <span>量比： <b class="down">0.91</b></span>
+                <span class="link">更多 ›</span>
+              </div>
+              <div class="tracking"><b>近期跟踪</b><span class="faces" aria-hidden="true">
+                <i style="--portrait:#3c414c;--jacket:#454d5d"></i><i style="--portrait:#ab463e;--jacket:#b7554d"></i><i style="--portrait:#4089b3"></i><i style="--portrait:#303544"></i><i style="--portrait:#526476"></i><i style="--portrait:#568db4;--jacket:#45616f"></i><i style="--portrait:#6693b6;--jacket:#ebdfd4"></i><i style="--portrait:#487fae;--jacket:#6887a0"></i><i style="--portrait:#74a0c0;--jacket:#e7e9eb"></i><i style="--portrait:#548bb6;--jacket:#594340"></i>
+              </span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card review-card" aria-label="概览">
+          <div class="tabs">
+            <span class="on">概览</span><span>业绩期</span><span>深度研究</span><span>分析师</span><span>热度</span>
+            <div class="ai-pills"><i class="ai-mark">AI</i>研究洞见<span>问问进宝</span></div>
+          </div>
+          <div class="review">
+            <h2>研究复盘</h2>
+            <div class="kbar">
+              <span class="link">分时</span><span>日K</span><span>周K</span><span>月K</span><span>年K</span>
+              <span>1分 <svg class="icon small"><use href="#i-chevron"/></svg></span>
+              <span class="link adjust">不复权 <svg class="icon small"><use href="#i-chevron"/></svg></span>
+              <span class="fullscreen"><svg class="icon"><use href="#i-expand"/></svg> 全屏</span>
+            </div>
+            <canvas id="chart" role="img" aria-label="瑞芯微 11 月 9 日分时价格和成交量"></canvas>
+          </div>
+        </section>
+
+        <section class="card split" aria-label="研究动态与业绩">
+          <div class="dyn">
+            <div class="dyn-h"><h2>研究动态</h2><div class="ai-pills"><i class="ai-mark">AI</i>动态速览：边际变化<span>问问进宝</span></div></div>
+            <div class="subtabs"><span class="on">事件信号</span><span>观点</span><span>纪要</span><span>公告</span><span>内资研报</span><span>外资研报</span><span>问答</span><span>资讯</span><span class="filter"><svg class="icon"><use href="#i-filter"/></svg></span></div>
+            <div id="events"></div>
+          </div>
+          <aside class="side-col">
+            <section class="earn">
+              <div class="earn-h">
+                <h2>最新业绩</h2>
+                <button class="valuation-trigger" type="button" aria-haspopup="dialog" aria-controls="valuation-model">估值模型</button>
+                <span class="link">更多 ›</span>
+              </div>
+              <div class="year"><svg class="icon link"><use href="#i-report"/></svg>　财年结束日：12-31</div>
+              <div class="report">
+                <div class="report-line"><b>1Q-3Q FY26</b><time datetime="2026-10-27">发布日期：2026-10-27</time></div>
+                <div class="report-line"><span>业绩报告</span><span class="link">原文 <svg class="icon small"><use href="#i-link"/></svg></span></div>
+              </div>
+              <div class="metric"><div><b>营业总收入</b><br>同比</div><div class="value">44.49亿<br><span class="up">+41.64%</span></div></div>
+              <div class="metric"><div><b>归母净利润</b><br>同比</div><div class="value">13.32亿<br><span class="up">+70.90%</span></div></div>
+              <span class="more-link link">查看更多</span>
+            </section>
+            <section class="act">
+              <h2>近期活动</h2>
+              <div class="act-filters"><span class="link">路演 21</span><span>调研 12</span><span>策略会 30</span><svg class="icon"><use href="#i-filter"/></svg></div>
+              <div class="act-item"><span class="link">#公开</span> 瑞芯微2026年半年度业绩说明会<small>09-11 11:00　业绩发布</small></div>
+              <div class="act-item"><span class="link">#专场</span> 东北证券 | 2月金股交流会<small>01-30 15:00　公司分析</small></div>
+              <div class="act-item"><span class="link">#公开</span> 瑞芯微2025年第三季度业绩说明会<small>2025-11-14 11:00　业绩发布</small></div>
+            </section>
+          </aside>
+        </section>
+      </main>
+      <div class="compact" hidden>
+        <div class="identity" aria-hidden="true"><span class="mark">Rockchip</span><b>瑞芯微</b></div>
+        <span class="down" aria-hidden="true">212.00 <small>CNY</small>　-0.32%</span>
+        <div class="tabs" aria-hidden="true">
+          <span class="on">概览</span><span>业绩期</span><span>深度研究</span><span>分析师</span><span>热度</span>
+          <div class="ai-pills"><i class="ai-mark">AI</i>研究洞见<span>问问进宝</span></div>
+        </div>
+        <div class="quote-actions">
+          <span class="follow" style="display:grid;place-items:center" aria-hidden="true">−自选</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <span class="support" aria-label="客服"><svg class="icon"><use href="#i-headset"/></svg></span>
+</div>
+
+<dialog class="valuation-dialog" id="valuation-model" data-view="start" aria-labelledby="valuation-title">
+  <form class="valuation-shell" method="dialog">
+    <header class="valuation-heading">
+      <div>
+        <h2 id="valuation-title" tabindex="-1" autofocus>估值模型</h2>
+        <p>瑞芯微 · 603893.SH</p>
+      </div>
+      <div class="valuation-controls">
+        <span class="valuation-badge">展示原型</span>
+        <button class="valuation-icon-button" type="button" data-val-expand aria-label="最大化" aria-pressed="false" hidden><svg class="icon"><use href="#i-expand"/></svg></button>
+        <button class="valuation-icon-button" type="submit" aria-label="关闭估值模型">×</button>
+      </div>
+    </header>
+    <section class="valuation-view" data-val-view="start" aria-label="启动建模">
+      <div class="valuation-body valuation-start-body">
+        <div class="valuation-stock">
+          <span class="mark" aria-hidden="true">Rockchip</span>
+          <div><strong>瑞芯微</strong><small>603893.SH · A 股 · 人民币计价</small></div>
+        </div>
+        <div>
+          <h3>建模范围</h3>
+          <p class="valuation-copy">整理历史财务和主营分部，预测收入、成本和利润，完成相对估值（PE）与 DCF 估值。</p>
+        </div>
+        <div>
+          <h3>生成后可查看</h3>
+          <ul class="valuation-deliverables">
+            <li><svg class="icon small" aria-hidden="true"><use href="#i-apps"/></svg><div><strong>Excel 估值工作簿</strong><small>财务预测、估值结果与计算公式</small></div></li>
+            <li><svg class="icon small" aria-hidden="true"><use href="#i-report"/></svg><div><strong>研究底稿</strong><small>关键假设、判断依据与风险</small></div></li>
+          </ul>
+        </div>
+        <dl class="valuation-estimates">
+          <div>
+            <dt><svg class="icon small" aria-hidden="true"><use href="#i-clock"/></svg>预计耗时</dt>
+            <dd><strong>15–30</strong> 分钟</dd>
+          </div>
+          <div>
+            <dt><svg class="icon small" aria-hidden="true"><use href="#i-coins"/></svg>预计消耗</dt>
+            <dd><strong>50–100</strong> 牛币</dd>
+          </div>
+        </dl>
+      </div>
+      <footer class="valuation-footer valuation-start-footer">
+        <p>建模期间可收起窗口，稍后回来查看进度。</p>
+        <button class="valuation-button primary" type="button" data-val-start>开始建模</button>
+      </footer>
+    </section>
+    <section class="valuation-view" data-val-view="progress" aria-label="任务进度" hidden>
+      <div class="valuation-body">
+        <div class="valuation-status" aria-live="polite"><strong data-val-stage tabindex="-1">准备启动</strong><span data-val-progress-count></span></div>
+        <progress class="valuation-progress-meter" data-val-meter aria-label="建模进度" value="0"></progress>
+        <ol class="valuation-stages" data-val-stages></ol>
+      </div>
+      <footer class="valuation-footer">
+        <button class="valuation-button" type="button" data-val-previous hidden>查看上一版 Excel</button>
+        <button class="valuation-button" type="submit">收起</button>
+      </footer>
+    </section>
+    <section class="valuation-view" data-val-view="result" aria-label="估值结果" hidden>
+      <div class="valuation-meta">
+        <span data-val-version>演示版本 1</span>
+        <span>数据快照 <time data-val-as-of></time></span>
+        <span class="valuation-pass" data-val-cloud-status role="status"></span>
+      </div>
+      <div class="valuation-toolbar">
+        <nav class="valuation-controls" aria-label="本次建模产物">
+          <button class="valuation-product-tab" type="button" data-val-product="workbook" aria-pressed="true">Excel 工作簿</button>
+          <button class="valuation-product-tab" type="button" data-val-product="dossier" aria-pressed="false">研究底稿</button>
+        </nav>
+        <div class="valuation-controls">
+          <button class="valuation-button" type="button" data-val-task hidden>返回进度</button>
+          <button class="valuation-button" type="button" data-val-start>重新建模</button>
+          <button class="valuation-button cloud" type="button" data-val-cloud-save>
+            <svg class="icon small" aria-hidden="true"><use href="#i-folder"/></svg><span data-val-cloud-label>保存到云文档</span>
+          </button>
+          <a class="valuation-button primary" href="output/20261109_103934_603893/瑞芯微_估值模型.xlsx" download>下载 Excel</a>
+        </div>
+      </div>
+      <section class="valuation-workbook" data-val-panel="workbook" aria-label="Excel 工作簿预览">
+        <div class="valuation-workbook-bar">
+          <svg class="icon" aria-hidden="true"><use href="#i-apps"/></svg>
+          <span>瑞芯微_估值模型.xlsx</span><small>只读预览</small>
+        </div>
+        <div class="valuation-formula-bar">
+          <span class="valuation-cell-address" data-val-address>A1</span>
+          <i aria-hidden="true">ƒx</i>
+          <output data-val-formula aria-label="所选单元格的内容或公式"></output>
+        </div>
+        <div class="valuation-grid" data-val-grid></div>
+        <nav class="valuation-sheet-tabs" data-val-sheets aria-label="Excel 工作表"></nav>
+        <div class="valuation-workbook-status"><span data-val-active-sheet>总结</span><span>来自瑞芯微已生成工作簿</span></div>
+      </section>
+      <section class="valuation-dossier" data-val-panel="dossier" aria-labelledby="valuation-dossier-title" hidden>
+        <nav class="valuation-dossier-nav" aria-label="研究底稿目录">
+          <strong>章节目录</strong>
+          <ol data-val-chapter-nav></ol>
+        </nav>
+        <div class="valuation-dossier-page" data-val-dossier-page>
+          <header>
+            <h3 id="valuation-dossier-title">研究底稿</h3>
+            <p>同版本研究底稿的章节节选</p>
+          </header>
+          <div data-val-chapters></div>
+        </div>
+      </section>
+    </section>
+  </form>
+</dialog>
+
+<script type="application/json" id="valuation-demo-workbook">
+{
+  "asOf": "2026-11-09 10:39:31",
+  "styles": ["","color:#FFFFFF;background-color:#0E2744;font-weight:600;text-align:center","color:#FFFFFF;background-color:#0E2744;font-weight:600","color:#0E2744;background-color:#F4F7FB;text-align:left","color:#152033;text-align:left;white-space:normal","","text-align:left","color:#152033;white-space:normal","color:#FFFFFF;background-color:#2A4A70;font-weight:600;text-align:left","color:#FFFFFF;background-color:#2A4A70;font-weight:600","color:#152033;background-color:#F4F7FB;text-align:left","color:#152033;text-align:right","color:#152033;background-color:#EAF0F7;font-weight:600;text-align:left","background-color:#EAF0F7;font-weight:600","color:#152033;background-color:#EAF0F7;font-weight:600;text-align:right","color:#000000;text-align:right","color:#0E2744;background-color:#F4F7FB;text-align:left","color:#152033;background-color:#EAF0F7;font-weight:600;text-align:left","color:#152033;background-color:#EAF0F7;font-weight:600;text-align:right","color:#152033;background-color:#EAF0F7;font-weight:600;text-align:right","color:#152033;text-align:right","color:#152033;background-color:#F4F7FB;text-align:left","color:#152033;text-align:right","color:#1D4E89;text-align:right","color:#0E2744;background-color:#C5D0DE;font-weight:600;text-align:left","color:#152033;text-align:right","color:#647084;text-align:right","color:#FFFFFF;background-color:#2A4A70;font-weight:600;text-align:center","color:#0E2744;background-color:#F4F7FB;font-weight:600;text-align:left","color:#1D4E89;font-weight:600;text-align:right","color:#1D4E89;text-align:right","color:#0E2744;background-color:#EAF0F7;font-weight:600;text-align:left","color:#1D4E89;background-color:#EAF0F7;font-weight:600;text-align:right","color:#1D4E89;background-color:#EAF0F7;font-weight:600;text-align:right","color:#647084;white-space:normal","color:#0E2744;background-color:#D3DEEA;font-weight:600;text-align:center","color:#0E2744;background-color:#F4F7FB;font-weight:600;text-align:center","color:#0E2744;background-color:#F4F7FB;text-align:left","color:#000000;text-align:right","color:#152033;text-align:left","color:#0E2744;background-color:#F4F7FB;font-weight:600;text-align:left","color:#000000;font-weight:600;text-align:right","color:#0E2744;background-color:#F4F7FB;font-weight:600;text-align:left","color:#152033;text-align:right","color:#000000;text-align:right","color:#0000FF;text-align:right","color:#0000FF;text-align:right","color:#0E2744;background-color:#EAF0F7;font-weight:600;text-align:left","color:#000000;background-color:#EAF0F7;font-weight:600;text-align:right","color:#000000;font-weight:600;text-align:right","color:#0E2744;background-color:#EAF0F7;font-weight:600;text-align:left","color:#000000;background-color:#EAF0F7;font-weight:600;text-align:right","color:#0E2744;background-color:#F4F7FB;text-align:left","color:#152033;text-align:left","color:#000000;text-align:right","color:#000000;font-weight:600;text-align:right","color:#0000FF;font-weight:600;text-align:right","color:#1D4E89;font-weight:600;text-align:right","color:#1D4E89;font-weight:600;text-align:right","color:#0000FF;font-weight:600;text-align:right","color:#000000;background-color:#EAF0F7;font-weight:600;text-align:right","color:#000000;background-color:#EAF0F7;font-weight:600;text-align:right","color:#000000;background-color:#EAF0F7;font-weight:600;text-align:right","color:#000000;text-align:right","color:#152033;text-align:right","color:#000000;text-align:right","","color:#000000;background-color:#EAF0F7;font-weight:600;text-align:right","background-color:#EAF0F7;font-weight:600","color:#1D4E89;text-align:right","color:#000000;background-color:#EAF0F7;font-weight:600;text-align:right","color:#0E2744;background-color:#D3DEEA;font-weight:600;text-align:right","color:#000000;text-align:right","color:#0E2744;background-color:#D3DEEA;font-weight:600;text-align:center"],
+  "chapters": [
+    {"heading":"一、投资要点","paragraphs":["评级：观察；目标价135.84元；现价213.59元；较现价空间-36.4%。","1. 2026H1智能应用处理器芯片收入26.0亿元、同比增长40.8%，为主业增长提供了实际验证，但全年模型要求H2实现30.0亿元，交付恢复与新品放量仍待兑现。 2. 本模型预测2026E—2028E营收由62.1亿元增至98.2亿元、EPS由3.57元增至5.33元，营收略高于一致预期，但后两年EPS低于一致预期，体现对中期利润转化的谨慎。 3. 38.0倍目标PE对应当前合理价格135.84元，而现价按同一倍数隐含EPS为5.62元，高于本模型2028E的5.33元，因此现价已包含更强的远期兑现要求。"]},
+    {"heading":"二、研究口径与最新经营验证","paragraphs":["资料截止日为2026-11-09。最近完整财年为2025A，预测期为2026E—2028E；营收及分部收入均按人民币亿元列示，EPS按元/股列示。分部沿用年报产品口径：智能应用处理器芯片、数模混合芯片、其他芯片、技术服务及其他；未覆盖的营业收入归入“其他”。公司档案所述主营业务为智能应用处理器SoC及周边配套芯片的设计、研发与销售。","公司披露的历史数、卖方报告转述的中报分部实际、机构预测与本模型假设需分开理解。2025A实际和历史分部数采用本次锁定口径；2026H1分部实际来自卖方对公司中报的转述；2026E—2028E是本模型预测，并非公司指引。2025年年度报告披露日期为2026-04-15，适用2025A（瑞芯微《瑞芯微：2025年年度报告》，2026-04-15）。"]},
+    {"heading":"三、投资逻辑","paragraphs":["1. 主芯片放量。 智能应用处理器芯片收入由2025A的39.3亿元升至2026E的56.0亿元、2027E的73.0亿元和2028E的90.0亿元，核心兑现条件是新品放量与交付恢复。 2. 盈利仍增长。 本模型预计营收由2026E的62.1亿元增至2028E的98.2亿元，EPS由3.57元升至5.33元，但增速从首年约44.1%逐步放缓至约19.1%。 3. 估值留有折价。 以2026E EPS 3.57元和目标PE 38.0倍对应目标价135.84元，较213.59元现价低36.4%，结论为观察而非追价。","先看资料时效和口径：资料截止日为2026-11-09，部分机构预测距截止日超过180天，例如中银国际证券2026-04-28、国盛证券2026-04-22、东海证券2026-04-20及西部证券2026-03-25；较新的公司预测包括东吴证券、华金证券2026-10-28，BofA Global Research 2026-10-27，以及华创证券2026-09-27。模型汇总的一致预期与机构逐份报告的分部预测不是完全同口径数据；以下总营收和EPS比较采用模型所列一致预期，分部比较仅作路径参照。"]},
+    {"heading":"四、业务展望","paragraphs":["2025A智能应用处理器芯片收入39.3亿元，占公司总营收44.0亿元约89.3%；本模型预测其2026E收入56.0亿元，占总营收62.1亿元约90.2%，主芯片仍是公司收入与盈利预测的核心。以下分部路径为模型估计，不等同于公司经营指引；分部披露和机构预测的适用范围均按各自报告口径理解。","2026H1分部收入26.0亿元、同比增长40.8%，但2026全年56.0亿元预测要求H2实现30.0亿元、同比约增长44%，略快于H1。支持这一假设的因素是RK182X预计四季度放量、RK3572等新品三季度量产并预计四季度大规模出货，同时部分顺延订单可能随交付恢复确认；东吴证券于2026-10-28提出上述交付及新品判断，适用2026Q3和Q4，但未披露Q3本分部实际，故不能视为已确认收入（东吴证券《瑞芯微(603893)2026年第三季度报告点评：Q3业绩保持高增 端侧AI新品放量在即》，2026-10-28）。华创证券2026-09-27给出2026E—2028E分部收入59.84/79.96/99.0…"]},
+    {"heading":"五、盈利预测","paragraphs":["毛利率从2023A的34.2%升至2025A的41.9%，本模型预计2026E达到44.0%，后续回落至2027E的43.5%和2028E的43.0%。2026H1卖方转述的公司合并毛利率约45.79%，为全年44.0%提供了较高的阶段性参照，但存储等原材料涨价、PCB供应及产品竞争会限制线性外推；东吴证券2026-10-28亦提示三季度供应和交期扰动，适用2026Q3及Q4经营判断。模型年度毛利率是预测假设，不是公司指引。","费用率方面，销售、管理、研发费用率合计由2025A约20.0%降至2026E约19.6%、2027E约19.1%和2028E约18.7%；这是收入增长带来销售及管理费用摊薄、研发投入增长慢于收入的计算假设，并不表示研发绝对投入下降。归母净利润2026E同比约增长45.2%，快于营收41.1%；2027E、2028E归母净利润增速约20.1%、19.6%，低于同期营收增速29.1%、22.5%，利润增长斜率在首年后放缓。模型净利率约由2026E的24.3%降至2028E的23.0%。"]},
+    {"heading":"六、估值与评级","paragraphs":["同业优先考虑应用处理器、多媒体SoC、视觉及边缘AI SoC，再以音频、AIoT和低功耗终端设计公司作补充。申万宏源材料对晶晨、全志、乐鑫、星宸等在多媒体SoC、应用处理器、IoT及视觉芯片方向的业务交集有描述，可支持业务可比性，但不代表其PE应等权用于本公司定价（申万宏源《瑞芯微(603893)深度报告：“SOC+AI协处理器”双轨并行 引领端侧AIOT 2.0》，2026-03-23）。西部证券对中科蓝讯的材料显示其2025年归母利润受被投企业公允价值变动及处置收益影响，扣非与归母利润明显不同，故不将其PE作为核心定价参照（西部证券《中科蓝讯(688332)首次覆盖：无线音频SOC龙头固本拓新 AI光通信业务…","应用处理器、视觉及多媒体SoC直接参照的2026E PE区间约18.51—41.43倍；乐鑫科技55.7倍作为平台型估值较高的上沿参照。候选池PE均值42.2倍、中位数35.7倍仅用于观察离散程度，均不替代目标PE。恒玄科技96.2倍显著高于其他样本，可能含有盈利恢复预期，但输入材料不能核实其估值对应的具体预测盈利；乐鑫、炬芯、恒玄等补充样本业务结构或计算场景有差异，保留在池中不代表与直接SoC参照等权定价。估值分散反映业务结构、成长阶段及利润基数差异，不能机械取均值或中位数。"]},
+    {"heading":"七、反证与跟踪","paragraphs":["最可能推翻主线的解释是：三季度订单顺延并非单纯的交付时点扰动，而是终端需求或客户拉货低于预期，RK182X、RK3572等新品放量不足以抵消。若该解释成立，应先下调智能应用处理器芯片2026E收入假设56.0亿元，而不是先提高或降低估值倍数；再据此修正2026E EPS 3.57元，最后按38.0倍重算目标价。现有材料没有Q3分部收入、订单取消率或产品出货量，尚不能判断“延期”与“需求减弱”哪种解释更符合实际。","下一观察窗口为公司2026年年度报告及其后首次可比的分部披露，重点核对智能应用处理器芯片H2收入是否达到模型要求的约30.0亿元、公司Q4营收是否接近所需的17.6亿元，以及新品量产是否转化为可确认收入。若H2主芯片收入低于30.0亿元或全年低于56.0亿元，先下调分部收入及2026E EPS，再按38.0倍重估目标价；若全年毛利率低于模型44.0%，则先下修毛利率假设并复核2027E—2028E利润率路径。后续还应跟踪分部收入、毛利率及RK182X/RK3572等产品的实际出货披露；在缺乏量价和订单数据时，不以公司整体增速替代分部验证。"]},
+    {"heading":"八、主要风险","paragraphs":["- 交付与供应链。 若PCB供应、交期问题延续或订单顺延不能在四季度恢复，智能应用处理器芯片H2收入约30.0亿元的要求可能落空，2026E营收62.1亿元、EPS 3.57元及目标价均承压。 - 需求及新品爬坡。 若RK182X、RK3572等量产新品客户导入慢于预期，2026E主芯片分部56.0亿元及2027E、2028E收入路径需下修，盈利与目标价随之下行。 - 成本与毛利率。 若存储等原材料涨价或产品竞争令2026E毛利率低于模型44.0%，归母净利润和首年EPS将低于预测，按38.0倍估算的目标价下行。 - 利润转化与预测兑现。 若有效税率正常化快于模型8%—10%的路径、财务费用净收益或其他经营净收益…","> 本模型由 AI 根据公开资料自动生成，仅供研究演示，不构成投资建议。"]}
+  ],
+  "sheets": [
+    {
+      "name": "总结",
+      "widths": [216,96,96,96,96,28,156,81,81,81,81],
+      "merges": ["H28:K28","C15:D15","H3:K3","B30:E30","I11:J11","C14:D14","G27:K27","B5:E5","A1:K1","H5:K5","B36:K36","G7:K7","C10:D10","B4:E4","H30:K30","A7:E7","B35:K35","B3:E3","H29:K29","C9:D9","A27:E27","H4:K4","B31:E31","A12:E12","H31:K31","C11:D11","A33:K33","B2:E2","I8:J8","C8:D8","I10:J10","A38:K38","H2:K2","B29:E29","C13:D13","B34:K34","B28:E28","I9:J9","B37:K37"],
+      "heights": {"1":43,"2":27,"3":27,"4":27,"5":29,"6":25,"7":29,"8":29,"9":29,"10":27,"11":27,"12":29,"13":27,"14":27,"15":27,"16":25,"17":29,"18":25,"19":25,"20":25,"21":25,"22":25,"23":25,"24":25,"25":25,"26":25,"27":29,"28":93,"29":93,"30":93,"31":93,"32":25,"33":29,"34":51,"35":51,"36":72,"37":72,"38":32},
+      "styleIds": {"A1":1,"B1":2,"C1":2,"D1":2,"E1":2,"F1":2,"G1":2,"H1":2,"I1":2,"J1":2,"K1":2,"A2":3,"B2":4,"C2":5,"D2":5,"E2":5,"F2":5,"G2":6,"H2":6,"I2":5,"J2":5,"K2":5,"A3":3,"B3":4,"C3":5,"D3":5,"E3":5,"F3":5,"G3":6,"H3":6,"I3":5,"J3":5,"K3":5,"A4":3,"B4":4,"C4":5,"D4":5,"E4":5,"F4":5,"G4":6,"H4":6,"I4":5,"J4":5,"K4":5,"A5":3,"B5":7,"C5":5,"D5":5,"E5":5,"F5":5,"G5":6,"H5":6,"I5":5,"J5":5,"K5":5,"A6":5,"B6":5,"C6":5,"D6":5,"E6":5,"F6":5,"G6":5,"H6":5,"I6":5,"J6":5,"K6":5,"A7":8,"B7":9,"C7":9,"D7":9,"E7":9,"F7":5,"G7":8,"H7":9,"I7":9,"J7":9,"K7":9,"A8":10,"B8":11,"C8":12,"D8":13,"E8":14,"F8":5,"G8":3,"H8":15,"I8":16,"J8":5,"K8":15,"A9":17,"B9":18,"C9":12,"D9":13,"E9":19,"F9":5,"G9":3,"H9":15,"I9":16,"J9":5,"K9":15,"A10":10,"B10":20,"C10":21,"D10":5,"E10":11,"F10":5,"G10":3,"H10":15,"I10":16,"J10":5,"K10":15,"A11":10,"B11":22,"C11":21,"D11":5,"E11":11,"F11":5,"G11":3,"H11":23,"I11":16,"J11":5,"K11":23,"A12":24,"B12":5,"C12":5,"D12":5,"E12":5,"F12":5,"G12":5,"H12":5,"I12":5,"J12":5,"K12":5,"A13":10,"B13":11,"C13":21,"D13":5,"E13":25,"F13":5,"G13":5,"H13":5,"I13":5,"J13":5,"K13":5,"A14":10,"B14":25,"C14":21,"D14":5,"E14":25,"F14":5,"G14":5,"H14":5,"I14":5,"J14":5,"K14":5,"A15":10,"B15":25,"C15":21,"D15":5,"E15":26,"F15":5,"G15":5,"H15":5,"I15":5,"J15":5,"K15":5,"A16":5,"B16":5,"C16":5,"D16":5,"E16":5,"F16":5,"G16":5,"H16":5,"I16":5,"J16":5,"K16":5,"A17":8,"B17":27,"C17":27,"D17":27,"E17":27,"F17":5,"G17":8,"H17":27,"I17":27,"J17":27,"K17":27,"A18":28,"B18":29,"C18":29,"D18":29,"E18":29,"F18":5,"G18":3,"H18":30,"I18":30,"J18":30,"K18":30,"A19":28,"B19":29,"C19":29,"D19":29,"E19":29,"F19":5,"G19":3,"H19":30,"I19":30,"J19":30,"K19":30,"A20":28,"B20":29,"C20":29,"D20":29,"E20":29,"F20":5,"G20":3,"H20":30,"I20":30,"J20":30,"K20":30,"A21":31,"B21":32,"C21":32,"D21":32,"E21":32,"F21":5,"G21":3,"H21":30,"I21":30,"J21":30,"K21":30,"A22":31,"B22":33,"C22":33,"D22":33,"E22":33,"F22":5,"G22":3,"H22":30,"I22":30,"J22":30,"K22":30,"A23":3,"B23":30,"C23":30,"D23":30,"E23":30,"F23":5,"G23":5,"H23":5,"I23":5,"J23":5,"K23":5,"A24":3,"B24":30,"C24":30,"D24":30,"E24":30,"F24":5,"G24":5,"H24":5,"I24":5,"J24":5,"K24":5,"A25":3,"B25":30,"C25":30,"D25":30,"E25":30,"F25":5,"G25":5,"H25":5,"I25":5,"J25":5,"K25":5,"A26":5,"B26":5,"C26":5,"D26":5,"E26":5,"F26":5,"G26":5,"H26":5,"I26":5,"J26":5,"K26":5,"A27":8,"B27":9,"C27":9,"D27":9,"E27":9,"F27":5,"G27":8,"H27":9,"I27":9,"J27":9,"K27":9,"A28":3,"B28":7,"C28":5,"D28":5,"E28":5,"F28":5,"G28":3,"H28":7,"I28":5,"J28":5,"K28":5,"A29":3,"B29":7,"C29":5,"D29":5,"E29":5,"F29":5,"G29":3,"H29":7,"I29":5,"J29":5,"K29":5,"A30":3,"B30":7,"C30":5,"D30":5,"E30":5,"F30":5,"G30":3,"H30":7,"I30":5,"J30":5,"K30":5,"A31":3,"B31":7,"C31":5,"D31":5,"E31":5,"F31":5,"G31":3,"H31":7,"I31":5,"J31":5,"K31":5,"A32":5,"B32":5,"C32":5,"D32":5,"E32":5,"F32":5,"G32":5,"H32":5,"I32":5,"J32":5,"K32":5,"A33":8,"B33":9,"C33":9,"D33":9,"E33":9,"F33":9,"G33":9,"H33":9,"I33":9,"J33":9,"K33":9,"A34":3,"B34":7,"C34":5,"D34":5,"E34":5,"F34":5,"G34":5,"H34":5,"I34":5,"J34":5,"K34":5,"A35":3,"B35":7,"C35":5,"D35":5,"E35":5,"F35":5,"G35":5,"H35":5,"I35":5,"J35":5,"K35":5,"A36":3,"B36":7,"C36":5,"D36":5,"E36":5,"F36":5,"G36":5,"H36":5,"I36":5,"J36":5,"K36":5,"A37":3,"B37":7,"C37":5,"D37":5,"E37":5,"F37":5,"G37":5,"H37":5,"I37":5,"J37":5,"K37":5,"A38":34,"B38":5,"C38":5,"D38":5,"E38":5,"F38":5,"G38":5,"H38":5,"I38":5,"J38":5,"K38":5},
+      "values": [
+        ["瑞芯微（603893）","","","","","","","","","",""],
+        ["公司简称","瑞芯微","","","","","蓝字","手动输入","","",""],
+        ["申万行业","电子 / 半导体 / 数字芯片设计","","","","","黑字","本表公式","","",""],
+        ["法定代表人","励民","","","","","深蓝字","跨表引用","","",""],
+        ["主营业务","智能应用处理器SoC及周边配套芯片的设计、研发与销售。","","","","","红字","负数","","",""],
+        ["","","","","","","","","","",""],
+        ["估值概览","","","","","","当前行情","","","",""],
+        ["当前股价（元）","213.59","相对估值目标价（元）","","135.84","","1日涨跌幅","+0.43%","近1周涨跌幅","","+17.76%"],
+        ["较现价空间","-36.40%","投资评级","","观察","","1月涨跌幅","+7.06%","3月涨跌幅","","+4.63%"],
+        ["目标PE","38.00x","2026E EPS（元）","","3.57","","6月涨跌幅","+22.76%","年初至今涨跌幅","","+20.70%"],
+        ["相对估值区间（元）","115.47 - 156.22","2025A EPS（元）","","2.48","","总市值（亿元）","904.33","流通市值（亿元）","","904.23"],
+        ["DCF交叉验证","","","","","","","","","",""],
+        ["DCF每股价值（元）","43.87","DCF较现价空间","","-79.46%","","","","","",""],
+        ["折现率 WACC","13.83%","永续增长率","","3.00%","","","","","",""],
+        ["终值现值占比","83.24%","假设状态","","含估计参数","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["财务预测","2025A","2026E","2027E","2028E","","关键经营假设","2025A","2026E","2027E","2028E"],
+        ["营业收入","44.02","62.10","80.17","98.24","","合并毛利率","41.95%","44.00%","43.50%","43.00%"],
+        ["毛利","18.47","27.32","34.87","42.24","","销售费用率","1.87%","1.90%","1.85%","1.80%"],
+        ["息税前利润","10.65","16.00","20.41","24.72","","管理费用率","2.55%","2.50%","2.45%","2.40%"],
+        ["归母净利润","10.40","15.14","18.94","22.56","","研发费用率","15.53%","15.20%","14.80%","14.50%"],
+        ["EPS","2.48","3.57","4.47","5.33","","有效税率","6.96%","8.00%","9.00%","10.00%"],
+        ["营业收入同比增速","40.36%","41.06%","29.11%","22.53%","","","","","",""],
+        ["息税前利润率","24.19%","25.77%","25.46%","25.17%","","","","","",""],
+        ["归母净利润率","23.62%","24.37%","23.62%","22.97%","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["投资逻辑","","","","","","未来展望","","","",""],
+        ["1. 主芯片放量","智能应用处理器芯片收入由2025A的39.3亿元升至2026E的56.0亿元、2027E的73.0亿元和2028E的90.0亿元，核心兑现条件是新品放量与交付恢复。","","","","","1. 主芯片交付","2026E智能应用处理器芯片收入56.0亿元要求H2实现约30.0亿元、同比增长约44%，交付恢复与RK182X、RK3572放量是近期兑现条件。","","",""],
+        ["2. 预期差收敛","2026E本模型营收62.1亿元、较一致预期59.1亿元高5.1%，EPS 3.57元、较一致预期3.35元高6.8%；2028E营收高2.0%但EPS低8.8%。","","","","","2. 利润增长路径","本模型预计EPS由2026E的3.57元增至2027E的4.47元和2028E的5.33元，毛利率则由44.0%逐步回落至43.0%。","","",""],
+        ["3. 利润仍增长","本模型预计营收由2026E的62.1亿元增至2028E的98.2亿元，EPS由3.57元升至5.33元，但增速从首年约44.1%逐步放缓至约19.1%。","","","","","3. 配套芯片兑现","数模混合芯片2026H1收入2.16亿元、同比增长42.8%，模型2026E约4.55亿元隐含H2约增长14%，低于H1增速。","","",""],
+        ["4. 独立估值纪律","本次采用模型独立判断的基础PE 38.0倍，中性情景调整系数为1.0，目标价135.84元，较213.59元现价空间为-36.4%。","","","","","4. 音频产品爬坡","其他芯片模型收入由2026E约1.37亿元增至2028E约2.05亿元，依赖RK2116/RK2118量产后的客户导入，但尚无分部出货数据验证。","","",""],
+        ["","","","","","","","","","",""],
+        ["主要风险","","","","","","","","","",""],
+        ["1. 交付与供应链","若PCB供应、交期问题延续或订单顺延不能在四季度恢复，智能应用处理器芯片H2收入约30.0亿元的要求可能落空，2026E营收62.1亿元、EPS 3.57元及目标价均承压。","","","","","","","","",""],
+        ["2. 成本压缩毛利","若存储等原材料涨价或产品竞争令2026E毛利率低于模型44.0%，归母净利润和首年EPS将低于预测，按38.0倍估算的目标价下行。","","","","","","","","",""],
+        ["3. 利润转化风险","若有效税率正常化快于模型8%—10%的路径、财务费用净收益或其他经营净收益低于假设，EPS可能弱于营收表现；2028E模型EPS 5.33元已低于一致预期5.85元8.8%，中期利润兑现仍有风险。","","","","","","","","",""],
+        ["4. 估值回落","若增长或平台溢价不足以支撑38.0倍目标PE，或市场继续要求更高EPS兑现，估值倍数下调将进一步压低目标价；现价按38.0倍隐含EPS为5.62元，高于模型2028E EPS 5.33元。","","","","","","","","",""],
+        ["本模型由 AI 根据公开资料自动生成，仅供研究演示，不构成投资建议。","","","","","","","","","",""]
+      ],
+      "formulas": [
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","=历史财务数据!B35","","","=相对估值预测!B36","","","","","",""],
+        ["","=相对估值预测!B37","","","=相对估值预测!B38","","","","","",""],
+        ["","=相对估值预测!B34","","","='利润表预测'!E20","","","","","",""],
+        ["","=相对估值预测!B35","","","='利润表预测'!D20","","","=历史财务数据!B38","","","=历史财务数据!B39"],
+        ["","","","","","","","","","",""],
+        ["","='DCF估值'!B45","","","='DCF估值'!B46","","","","","",""],
+        ["","='DCF估值'!F27","","","='DCF估值'!F28","","","","","",""],
+        ["","='DCF估值'!B32","","","=IF('DCF估值'!B47=\"采用估计\",\"含估计参数\",'DCF估值'!B47)","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","='利润表预测'!D3","='利润表预测'!E3","='利润表预测'!F3","='利润表预测'!G3","","","='运营成本预测'!D3","='运营成本预测'!E3","='运营成本预测'!F3","='运营成本预测'!G3"],
+        ["","='利润表预测'!D7","='利润表预测'!E7","='利润表预测'!F7","='利润表预测'!G7","","","='运营成本预测'!D4","='运营成本预测'!E4","='运营成本预测'!F4","='运营成本预测'!G4"],
+        ["","='利润表预测'!D11","='利润表预测'!E11","='利润表预测'!F11","='利润表预测'!G11","","","='运营成本预测'!D5","='运营成本预测'!E5","='运营成本预测'!F5","='运营成本预测'!G5"],
+        ["","='利润表预测'!D18","='利润表预测'!E18","='利润表预测'!F18","='利润表预测'!G18","","","='运营成本预测'!D6","='运营成本预测'!E6","='运营成本预测'!F6","='运营成本预测'!G6"],
+        ["","='利润表预测'!D20","='利润表预测'!E20","='利润表预测'!F20","='利润表预测'!G20","","","='运营成本预测'!D7","='运营成本预测'!E7","='运营成本预测'!F7","='运营成本预测'!G7"],
+        ["","='利润表预测'!D3/'利润表预测'!C3-1","='利润表预测'!E3/'利润表预测'!D3-1","='利润表预测'!F3/'利润表预测'!E3-1","='利润表预测'!G3/'利润表预测'!F3-1","","","","","",""],
+        ["","='利润表预测'!D11/'利润表预测'!D3","='利润表预测'!E11/'利润表预测'!E3","='利润表预测'!F11/'利润表预测'!F3","='利润表预测'!G11/'利润表预测'!G3","","","","","",""],
+        ["","='利润表预测'!D18/'利润表预测'!D3","='利润表预测'!E18/'利润表预测'!E3","='利润表预测'!F18/'利润表预测'!F3","='利润表预测'!G18/'利润表预测'!G3","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""]
+      ]
+    },
+    {
+      "name": "主营业务拆分",
+      "widths": [246,111,111,111,111,216],
+      "merges": ["A21:A23","B16:F16","B25:F25","B22:F22","B18:F18","B27:F27","B21:F21","B12:F12","A10:A12","B11:F11","B23:F23","B14:F14","B17:F17","B29:F29","B10:F10","B28:F28","B19:F19","A14:A19","B15:F15","A25:A29","A1:F1","B26:F26"],
+      "heights": {"1":43,"2":29,"3":25,"4":25,"5":25,"6":25,"7":25,"8":25,"9":25,"10":27,"11":48,"12":69,"13":25,"14":27,"15":27,"16":27,"17":27,"18":27,"19":27,"20":25,"21":48,"22":27,"23":27,"24":25,"25":27,"26":27,"27":27,"28":48,"29":48},
+      "styleIds": {"A1":1,"B1":2,"C1":2,"D1":2,"E1":2,"F1":2,"A2":35,"B2":36,"C2":36,"D2":36,"E2":35,"F2":35,"A3":37,"B3":38,"C3":38,"D3":38,"E3":39,"F3":39,"A4":37,"B4":38,"C4":38,"D4":38,"E4":39,"F4":39,"A5":37,"B5":38,"C5":38,"D5":38,"E5":39,"F5":39,"A6":37,"B6":38,"C6":38,"D6":38,"E6":39,"F6":39,"A7":37,"B7":38,"C7":38,"D7":38,"E7":39,"F7":39,"A8":40,"B8":41,"C8":41,"D8":41,"E8":5,"F8":5,"A9":5,"B9":5,"C9":5,"D9":5,"E9":5,"F9":5,"A10":42,"B10":4,"C10":5,"D10":5,"E10":5,"F10":5,"A11":5,"B11":4,"C11":5,"D11":5,"E11":5,"F11":5,"A12":5,"B12":4,"C12":5,"D12":5,"E12":5,"F12":5,"A13":5,"B13":5,"C13":5,"D13":5,"E13":5,"F13":5,"A14":42,"B14":4,"C14":5,"D14":5,"E14":5,"F14":5,"A15":5,"B15":4,"C15":5,"D15":5,"E15":5,"F15":5,"A16":5,"B16":4,"C16":5,"D16":5,"E16":5,"F16":5,"A17":5,"B17":4,"C17":5,"D17":5,"E17":5,"F17":5,"A18":5,"B18":4,"C18":5,"D18":5,"E18":5,"F18":5,"A19":5,"B19":4,"C19":5,"D19":5,"E19":5,"F19":5,"A20":5,"B20":5,"C20":5,"D20":5,"E20":5,"F20":5,"A21":42,"B21":4,"C21":5,"D21":5,"E21":5,"F21":5,"A22":5,"B22":4,"C22":5,"D22":5,"E22":5,"F22":5,"A23":5,"B23":4,"C23":5,"D23":5,"E23":5,"F23":5,"A24":5,"B24":5,"C24":5,"D24":5,"E24":5,"F24":5,"A25":42,"B25":4,"C25":5,"D25":5,"E25":5,"F25":5,"A26":5,"B26":4,"C26":5,"D26":5,"E26":5,"F26":5,"A27":5,"B27":4,"C27":5,"D27":5,"E27":5,"F27":5,"A28":5,"B28":4,"C28":5,"D28":5,"E28":5,"F28":5,"A29":5,"B29":4,"C29":5,"D29":5,"E29":5,"F29":5},
+      "values": [
+        ["瑞芯微-主营业务拆分","","","","",""],
+        ["分部名称","2023A","2024A","2025A","单位","备注"],
+        ["智能应用处理器芯片","19.11","27.72","39.27","亿元","年报披露"],
+        ["数模混合芯片","1.85","2.86","3.60","亿元","年报披露"],
+        ["其他芯片","0.20","0.58","0.98","亿元","年报披露"],
+        ["技术服务及其他","0.19","0.20","0.16","亿元","年报披露"],
+        ["其他","0.00","0.00","0.01","亿元","倒推"],
+        ["合计","21.35","31.36","44.02","",""],
+        ["","","","","",""],
+        ["拆分逻辑","以年报按产品口径为对账基准。","","","",""],
+        ["","智能应用处理器芯片、数模混合芯片、其他芯片、技术服务及其他沿用年报披露名称和金额。","","","",""],
+        ["","已列分部未覆盖的公司营业收入计入其他。视觉处理器、通用处理器、音频处理器历史全为缺数据的兜底零，已撤销该下钻，恢复年报父项智能应用处理器芯片。","","","",""],
+        ["","","","","",""],
+        ["结构变化","2025A 营业收入44.02亿元，较2024A增加12.66亿元（+40.4%）。","","","",""],
+        ["","智能应用处理器芯片：占比89.2%，同比+41.6%，对收入变动贡献+11.55亿元。","","","",""],
+        ["","数模混合芯片：占比8.2%，同比+26.0%，对收入变动贡献+0.74亿元。","","","",""],
+        ["","其他芯片：占比2.2%，同比+68.9%，对收入变动贡献+0.40亿元。","","","",""],
+        ["","技术服务及其他：占比0.4%，同比-19.6%，对收入变动贡献-0.04亿元。","","","",""],
+        ["","其他：占比0.0%，同比+7216.3%，对收入变动贡献+0.01亿元。","","","",""],
+        ["","","","","",""],
+        ["其他业务说明","其他：公司营业收入与已列分部之间的差额，2025A 为0.01亿元、占总收入0.0%；取数方式为倒推收口。","","","",""],
+        ["","仅保留有金额依据的父项差额及公司级收入差额；已撤销的子项不再独立预测。","","","",""],
+        ["","倒推项是口径差额，不能据此断定具体业务构成。","","","",""],
+        ["","","","","",""],
+        ["来源文件","年报主营构成数据（瑞芯微 2025 年度；接口未提供文件名）｜2026-04-15","","","",""],
+        ["","年报主营构成数据（瑞芯微 2024 年度；接口未提供文件名）｜2025-04-23","","","",""],
+        ["","年报主营构成数据（瑞芯微 2023 年度；接口未提供文件名）｜2024-04-15","","","",""],
+        ["","西部证券－瑞芯微(603893)首次覆盖：高性能SOC筑基端侧AI 产品持续迭代赋能千行百业｜2026-03-25","","","",""],
+        ["","东海证券－瑞芯微(603893)公司简评报告：旗舰芯片增强纵向发展力 产品矩阵丰富扩宽横向应用市场｜2026-04-20","","","",""]
+      ],
+      "formulas": [
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","=B3+B4+B5+B6+B7","=C3+C4+C5+C6+C7","=D3+D4+D5+D6+D7","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""]
+      ]
+    },
+    {
+      "name": "收入预测",
+      "widths": [246,104,104,104,104,104,104,104,321],
+      "merges": ["A29:I29","A7:I7","A26:I26","A11:I11","A5:I5","A13:I13","A14:I14","A1:I1","A17:I17","A9:I9","A23:I23","A3:I3","A20:I20"],
+      "heights": {"1":43,"2":29,"3":29,"4":25,"5":29,"6":25,"7":29,"8":25,"9":29,"10":25,"11":29,"12":25,"13":29,"14":29,"15":25,"16":25,"17":29,"18":25,"19":25,"20":29,"21":25,"22":25,"23":29,"24":25,"25":25,"26":29,"27":25,"28":25,"29":29,"30":25,"31":25,"32":25,"33":25,"34":25,"35":25},
+      "styleIds": {"A1":1,"B1":2,"C1":2,"D1":2,"E1":2,"F1":2,"G1":2,"H1":2,"I1":2,"A2":8,"B2":27,"C2":27,"D2":27,"E2":27,"F2":27,"G2":27,"H2":27,"I2":27,"A3":24,"B3":5,"C3":5,"D3":5,"E3":5,"F3":5,"G3":5,"H3":5,"I3":5,"A4":37,"B4":43,"C4":44,"D4":44,"E4":45,"F4":45,"G4":45,"H4":39,"I4":39,"A5":24,"B5":5,"C5":5,"D5":5,"E5":5,"F5":5,"G5":5,"H5":5,"I5":5,"A6":37,"B6":43,"C6":44,"D6":44,"E6":45,"F6":45,"G6":45,"H6":39,"I6":39,"A7":24,"B7":5,"C7":5,"D7":5,"E7":5,"F7":5,"G7":5,"H7":5,"I7":5,"A8":37,"B8":43,"C8":44,"D8":44,"E8":45,"F8":45,"G8":45,"H8":39,"I8":39,"A9":24,"B9":5,"C9":5,"D9":5,"E9":5,"F9":5,"G9":5,"H9":5,"I9":5,"A10":37,"B10":43,"C10":44,"D10":44,"E10":45,"F10":45,"G10":45,"H10":39,"I10":39,"A11":24,"B11":5,"C11":5,"D11":5,"E11":5,"F11":5,"G11":5,"H11":5,"I11":5,"A12":37,"B12":43,"C12":44,"D12":44,"E12":45,"F12":45,"G12":45,"H12":39,"I12":39,"A13":8,"B13":9,"C13":9,"D13":9,"E13":9,"F13":9,"G13":9,"H13":9,"I13":9,"A14":24,"B14":5,"C14":5,"D14":5,"E14":5,"F14":5,"G14":5,"H14":5,"I14":5,"A15":37,"B15":38,"C15":38,"D15":38,"E15":38,"F15":38,"G15":38,"H15":39,"I15":5,"A16":37,"B16":43,"C16":44,"D16":44,"E16":44,"F16":44,"G16":44,"H16":5,"I16":5,"A17":24,"B17":5,"C17":5,"D17":5,"E17":5,"F17":5,"G17":5,"H17":5,"I17":5,"A18":37,"B18":38,"C18":38,"D18":38,"E18":38,"F18":38,"G18":38,"H18":39,"I18":5,"A19":37,"B19":43,"C19":44,"D19":44,"E19":44,"F19":44,"G19":44,"H19":5,"I19":5,"A20":24,"B20":5,"C20":5,"D20":5,"E20":5,"F20":5,"G20":5,"H20":5,"I20":5,"A21":37,"B21":38,"C21":38,"D21":38,"E21":38,"F21":38,"G21":38,"H21":39,"I21":5,"A22":37,"B22":43,"C22":44,"D22":44,"E22":44,"F22":44,"G22":44,"H22":5,"I22":5,"A23":24,"B23":5,"C23":5,"D23":5,"E23":5,"F23":5,"G23":5,"H23":5,"I23":5,"A24":37,"B24":38,"C24":38,"D24":38,"E24":38,"F24":38,"G24":38,"H24":39,"I24":5,"A25":37,"B25":43,"C25":44,"D25":44,"E25":44,"F25":44,"G25":44,"H25":5,"I25":5,"A26":24,"B26":5,"C26":5,"D26":5,"E26":5,"F26":5,"G26":5,"H26":5,"I26":5,"A27":37,"B27":38,"C27":38,"D27":38,"E27":38,"F27":38,"G27":38,"H27":39,"I27":5,"A28":37,"B28":43,"C28":44,"D28":44,"E28":44,"F28":44,"G28":44,"H28":5,"I28":5,"A29":8,"B29":9,"C29":9,"D29":9,"E29":9,"F29":9,"G29":9,"H29":9,"I29":9,"A30":40,"B30":41,"C30":41,"D30":41,"E30":41,"F30":41,"G30":41,"H30":5,"I30":5,"A31":37,"B31":44,"C31":44,"D31":44,"E31":44,"F31":44,"G31":44,"H31":5,"I31":5,"A32":37,"B32":44,"C32":44,"D32":44,"E32":44,"F32":44,"G32":44,"H32":5,"I32":5,"A33":37,"B33":44,"C33":44,"D33":44,"E33":44,"F33":44,"G33":44,"H33":5,"I33":5,"A34":37,"B34":44,"C34":44,"D34":44,"E34":44,"F34":44,"G34":44,"H34":5,"I34":5,"A35":37,"B35":44,"C35":44,"D35":44,"E35":44,"F35":44,"G35":44,"H35":5,"I35":5},
+      "values": [
+        ["瑞芯微-收入预测","","","","","","","",""],
+        ["收入驱动假设区","2023A","2024A","2025A","2026E","2027E","2028E","单位","备注"],
+        ["智能应用处理器芯片（收入增速法）","","","","","","","",""],
+        ["收入增速","-","45.10%","41.65%","42.60%","30.40%","23.30%","%","预测分部收入约为2026E 56.0亿元、2027E 73.0亿元、2028E 90.0亿元。2026年判断以已实现的2026H1分部收入26.0亿元、同比增长40.8%为核心锚，而非用公司整体前三季度收入推算分部。按同比增速反推，2025H1约为18.47亿元，2025H2约为20.81亿元；若全年达到56.0亿元，2026H2需实现约30.0亿元、同比增长约44%。这比H1增速略快，但并非假设无条件加速：Q3 PCB供应和交期问题使部分订单顺延，报告预计四季度交付逐步恢复；RK182X放量及RK3572等新品从量产走向规模出货，提供了支撑H2高于H1增速的具体因素。由于没有Q3本分部收入，H2能否兑现仍是2026预测的主要不确定性。若延迟交付继续或新品爬坡慢于预期，全年更接近西南预测的54.979亿元；华创的59.84亿元则需要更强的下半年放量。我的56亿元略高于西南、低于华创，既承认H1强势和Q4新品/订单释放，也不把尚未确认的放量全部计入。2027年预测增长30.4%，延续主力算力平台、音频产品与协处理器导入带来的需求扩展，但较2026放缓，反映2026新品放量形成更高基数且项目导入转收入需要时间。2028年增速进一步回落至23.3%，主要考虑规模扩大后的基数效应及新品增长逐渐常态化，而非判断需求骤降。西南对2027—2028年预测为70.923/85.817亿元，华创为79.96/99.02亿元；本预测在两者之间偏向较审慎一侧，原因是暂未见可用于验证项目转化节奏的订单或分产品收入数据。历史收入采用用户锁定值；缺乏可靠量价拆分，不能据此判断真实出货量或单价变化。"],
+        ["数模混合芯片（收入增速法）","","","","","","","",""],
+        ["收入增速","-","54.63%","25.98%","26.27%","15.38%","13.33%","%","历史收入从2023年的1.8498亿元增至2024年的2.8603亿元，2025年进一步增至3.6034亿元；增速由2024年的约54.6%回落至2025年的约26.0%，体现出高速增长后仍在扩张、但基数已抬高。2026H1收入2.16亿元、同比增长42.8%，是近期最直接的分部证据，支持全年继续增长；但不能把公司整体Q3增速套用于本分部。按2025H1收入约1.51亿元反推，2025H2约2.09亿元。我的2026E收入为4.55亿元，对应H2约2.39亿元、同比约增长14%，意味着H1强劲增长后明显降速，而非全年维持42.8%的增速。三季度PCB供应短缺及交期延长造成部分订单顺延，四季度交付逐步恢复是支持下半年收入高于上年同期的具体依据；但因没有本分部Q3单季或前三季度累计披露，不假设出现大幅补偿性放量。该预测高于华创证券4.25亿元的2026E，低于西南证券4.864亿元：相较华创，我更重视已实现的H1高增长和四季度恢复；相较西南，我对缺少本分部Q3验证的持续高增假设更谨慎。2027E和2028E分别预测5.25亿元和5.95亿元，增速放缓至15.4%和13.3%。产品与主芯片配套、覆盖多类终端场景以及模拟IP和周边芯片布局，为中期增长提供基础；但配套业务各产品的收入贡献和新增客户兑现节奏未披露，故不采用西南证券25%/18%的中长期增速路径，也不据此推演更快增长。华创较新的分部预测及西南的中报后预测用于界定情景区间；更早的西部证券、申万宏源预测因2025E已被实际收入显著低于且时间早于H1实绩，不作为当前基准。"],
+        ["其他芯片（收入增速法）","","","","","","","",""],
+        ["收入增速","-","193.30%","68.91%","40.00%","25.00%","20.00%","%","历史增长很快，但基数仍小：分部收入由2023年的0.20亿元升至2024年的0.58亿元、2025年的0.98亿元，2024年同比约193%，2025年同比约69%。我不把早期高增速机械外推；小基数下产品扩充会带来较高百分比增长，但缺乏产品线收入拆分，无法判断增长是否来自持续放量、产品组合变化或个别项目。\n\n2026年取40%增长，对应收入约1.37亿元，接近华创证券的最新分部预测，也低于西南证券的60%增长假设。RK2116于2025年推出，RK2116/RK2118系列在2026年上半年进入量产，支持音频产品开始贡献增量；但公开材料没有其出货、客户导入进度或分部收入，量产不能直接等同于显著收入兑现，因此不采用西南较乐观的首年增速。材料中“2026H1其他收入0.61亿元”未确认对应本分部，不能作为本分部半年实际，也无法据此倒算全年剩余收入或判断下半年所需增速；2026年预测主要是基于历史基数和产品量产线索的审慎估计，而非半年收入外推。\n\n2027年设为25%增长，收入约1.71亿元：假设已量产产品逐步完成客户导入、爬坡，带来高于成熟业务的增长，但随着收入基数变大，增速较2026年回落。2028年进一步放缓至20%、收入约2.05亿元，反映产品扩充持续但暂不假设形成可验证的大规模新业务跃迁。该路径整体靠近华创2026—2028年1.37/1.65/1.98亿元的较审慎曲线；2027年略高于其20%增速，体现对音频量产爬坡的有限认可，但显著低于西南证券2027年45%的增速及其更高的2028年预测。西南假设包含音频专用芯片、快充协议芯片且给出较快增长，但现有材料不足以核验产品分类边界、订单及收入转化，故不将其高增长路径作为基准。最大不确定性是音频系列实际贡献、快充协议芯片等产品的分部归属与客户放量节奏；若后续披露显示量产产品快速导入，预测有上修空间，若量产仅处于早期验证或收入主要来自低增量产品，则增长可能更接近华创的低位路径。"],
+        ["技术服务及其他（收入增速法）","","","","","","","",""],
+        ["收入增速","-","5.38%","-19.57%","5.00%","5.00%","5.00%","%","历史轨迹先升后降：分部收入由2023A的0.1886亿元升至2024A的0.1987亿元，增约5.4%；2025A回落至0.1598亿元，同比降约19.6%。这个实际回落是判断的关键约束。西部证券和申万宏源在2026年3月给出的分部预测，分别隐含2025E收入0.2384亿元和约0.5亿元，均明显高于后来锁定的2025A实际，前者约高49%，后者约为实际的3.1倍；其较快增长或平台式假设已被实际结果显著削弱，不作为基准。\n\n基准采用西南证券2026年8月对本分部2026E—2028E每年增长5%的低增速情景，并以用户锁定的2025A实际0.15983202亿元为起点，按5%复合计算。由此对应的收入约为2026E 0.1678亿元、2027E 0.1762亿元、2028E 0.1850亿元。报告列示的0.168/0.176/0.185亿元与该路径接近；细微差异主要来自其2025A基数采用16.0百万元的舍入值。本预测优先保留锁定实际作为基数，而非照搬舍入基数。路径意味着2025年低基数后缓慢修复，但到2028年仍略低于2024A收入，并非假设快速回到旧卖方的高增长轨道。\n\n2026年前三季度公司总营收增长及芯片新品放量只能作为公司层面背景，现有材料没有本分部2026H1、Q3或前三季度单列实际，故不能据此上调本分部全年增速，也无法用已实现分部季度收入反推四季度所需收入。5%是对缺少分部经营驱动数据时的审慎基准，不代表公司指引或已验证的订单增长。若2025年下降来自一次性或确认节奏因素，收入可能较快恢复；若下降反映业务收缩，则5%也可能偏乐观。分部构成、季度波动及2026年最新单列收入仍是主要不确定性。"],
+        ["其他（收入增速法）","","","","","","","",""],
+        ["收入增速","-","-93.43%","7216.30%","0.00%","0.00%","0.00%","%","锁定口径下，收入从2023A的0.00148亿元降至2024A的0.000097亿元，2025A回升至0.00712亿元。百分比变化极端，但绝对金额始终很小：2025A收入约71万元，2024A仅约1万元。现有材料无法判断这轮波动究竟来自项目确认、业务迁移还是分部归类变化，因而不宜把2025年的低基数反弹外推成持续高增长，也不宜据此推断业务将大幅收缩。\n\n基准预测将2026E—2028E收入增速均设为0%，即暂以2025A收入水平持平。首年不外推2025年的异常反弹；后两年也不额外假设加速或衰退，因为没有可验证的分部订单、产品构成或需求传导证据。该处理是口径不明情况下的中性占位，不代表对实际经营稳定的判断。材料中中泰证券提及的2026H1“其他收入0.61亿元”与锁定分部差距显著且未披露边界，不能用于反推2026年剩余期间收入或增速；目前也没有本分部2026年季度/半年实际，因此无法检验全年预测所隐含的下半年趋势。公司整体业务增长、其他芯片预测及技术服务及其他预测均未证明属于此处的“其他”。\n\n最关键的不确定性是上游分部口径和业务映射缺失。若后续确认2026H1的0.61亿元与本历史序列同口径，或公司披露本分部新增项目/重分类，应立即重做基数与预测；在核实前，零增速比套用其他业务线的高增长率更稳妥。"],
+        ["收入构建区","","","","","","","",""],
+        ["智能应用处理器芯片（收入增速法）","","","","","","","",""],
+        ["分部收入","19.11","27.72","39.27","56.00","73.03","90.04","亿元",""],
+        ["分部收入增速","-","45.10%","41.65%","42.60%","30.40%","23.30%","",""],
+        ["数模混合芯片（收入增速法）","","","","","","","",""],
+        ["分部收入","1.85","2.86","3.60","4.55","5.25","5.95","亿元",""],
+        ["分部收入增速","-","54.63%","25.98%","26.27%","15.38%","13.33%","",""],
+        ["其他芯片（收入增速法）","","","","","","","",""],
+        ["分部收入","0.20","0.58","0.98","1.37","1.71","2.06","亿元",""],
+        ["分部收入增速","-","193.30%","68.91%","40.00%","25.00%","20.00%","",""],
+        ["技术服务及其他（收入增速法）","","","","","","","",""],
+        ["分部收入","0.19","0.20","0.16","0.17","0.18","0.19","亿元",""],
+        ["分部收入增速","-","5.38%","-19.57%","5.00%","5.00%","5.00%","",""],
+        ["其他（收入增速法）","","","","","","","",""],
+        ["分部收入","0.00","0.00","0.01","0.01","0.01","0.01","亿元",""],
+        ["分部收入增速","-","-93.43%","7216.30%","0.00%","0.00%","0.00%","",""],
+        ["收入归因","","","","","","","",""],
+        ["营业收入","21.35","31.36","44.02","62.10","80.17","98.24","",""],
+        ["智能应用处理器芯片收入占比","89.52%","88.40%","89.21%","90.18%","91.09%","91.66%","",""],
+        ["数模混合芯片收入占比","8.67%","9.12%","8.19%","7.33%","6.55%","6.06%","",""],
+        ["其他芯片收入占比","0.93%","1.85%","2.22%","2.21%","2.14%","2.09%","",""],
+        ["技术服务及其他收入占比","0.88%","0.63%","0.36%","0.27%","0.22%","0.19%","",""],
+        ["其他收入占比","0.01%","0.00%","0.02%","0.01%","0.01%","0.01%","",""]
+      ],
+      "formulas": [
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","=C15/B15-1","=D15/C15-1","","","","",""],
+        ["","","","","","","","",""],
+        ["","","=C18/B18-1","=D18/C18-1","","","","",""],
+        ["","","","","","","","",""],
+        ["","","=C21/B21-1","=D21/C21-1","","","","",""],
+        ["","","","","","","","",""],
+        ["","","=C24/B24-1","=D24/C24-1","","","","",""],
+        ["","","","","","","","",""],
+        ["","","=C27/B27-1","=D27/C27-1","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","=D15*(1+E4)","=E15*(1+F4)","=F15*(1+G4)","",""],
+        ["","","=C15/B15-1","=D15/C15-1","=E15/D15-1","=F15/E15-1","=G15/F15-1","",""],
+        ["","","","","","","","",""],
+        ["","","","","=D18*(1+E6)","=E18*(1+F6)","=F18*(1+G6)","",""],
+        ["","","=C18/B18-1","=D18/C18-1","=E18/D18-1","=F18/E18-1","=G18/F18-1","",""],
+        ["","","","","","","","",""],
+        ["","","","","=D21*(1+E8)","=E21*(1+F8)","=F21*(1+G8)","",""],
+        ["","","=C21/B21-1","=D21/C21-1","=E21/D21-1","=F21/E21-1","=G21/F21-1","",""],
+        ["","","","","","","","",""],
+        ["","","","","=D24*(1+E10)","=E24*(1+F10)","=F24*(1+G10)","",""],
+        ["","","=C24/B24-1","=D24/C24-1","=E24/D24-1","=F24/E24-1","=G24/F24-1","",""],
+        ["","","","","","","","",""],
+        ["","","","","=D27*(1+E12)","=E27*(1+F12)","=F27*(1+G12)","",""],
+        ["","","=C27/B27-1","=D27/C27-1","=E27/D27-1","=F27/E27-1","=G27/F27-1","",""],
+        ["","","","","","","","",""],
+        ["","=B15+B18+B21+B24+B27","=C15+C18+C21+C24+C27","=D15+D18+D21+D24+D27","=E15+E18+E21+E24+E27","=F15+F18+F21+F24+F27","=G15+G18+G21+G24+G27","",""],
+        ["","=B15/B30","=C15/C30","=D15/D30","=E15/E30","=F15/F30","=G15/G30","",""],
+        ["","=B18/B30","=C18/C30","=D18/D30","=E18/E30","=F18/F30","=G18/G30","",""],
+        ["","=B21/B30","=C21/C30","=D21/D30","=E21/E30","=F21/F30","=G21/G30","",""],
+        ["","=B24/B30","=C24/C30","=D24/D30","=E24/E30","=F24/F30","=G24/G30","",""],
+        ["","=B27/B30","=C27/C30","=D27/D30","=E27/E30","=F27/F30","=G27/G30","",""]
+      ]
+    },
+    {
+      "name": "运营成本预测",
+      "widths": [246,104,104,104,104,104,104,276],
+      "merges": ["A1:H1","A13:H13","A17:H17"],
+      "heights": {"1":43,"2":29,"3":25,"4":25,"5":25,"6":25,"7":25,"8":25,"9":25,"10":25,"11":25,"12":25,"13":29,"14":25,"15":25,"16":25,"17":29,"18":25,"19":25,"20":25,"21":25},
+      "styleIds": {"A1":1,"B1":2,"C1":2,"D1":2,"E1":2,"F1":2,"G1":2,"H1":2,"A2":8,"B2":27,"C2":27,"D2":27,"E2":27,"F2":27,"G2":27,"H2":27,"A3":37,"B3":30,"C3":30,"D3":30,"E3":45,"F3":45,"G3":45,"H3":39,"A4":37,"B4":30,"C4":30,"D4":30,"E4":45,"F4":45,"G4":45,"H4":5,"A5":37,"B5":30,"C5":30,"D5":30,"E5":45,"F5":45,"G5":45,"H5":5,"A6":37,"B6":30,"C6":30,"D6":30,"E6":45,"F6":45,"G6":45,"H6":5,"A7":37,"B7":30,"C7":30,"D7":30,"E7":45,"F7":45,"G7":45,"H7":5,"A8":37,"B8":23,"C8":23,"D8":23,"E8":46,"F8":46,"G8":46,"H8":5,"A9":37,"B9":23,"C9":23,"D9":23,"E9":46,"F9":46,"G9":46,"H9":5,"A10":37,"B10":23,"C10":23,"D10":23,"E10":46,"F10":46,"G10":46,"H10":5,"A11":37,"B11":30,"C11":30,"D11":30,"E11":45,"F11":45,"G11":45,"H11":5,"A12":37,"B12":23,"C12":23,"D12":23,"E12":46,"F12":46,"G12":46,"H12":5,"A13":8,"B13":9,"C13":9,"D13":9,"E13":9,"F13":9,"G13":9,"H13":9,"A14":37,"B14":23,"C14":23,"D14":23,"E14":23,"F14":23,"G14":23,"H14":5,"A15":47,"B15":48,"C15":48,"D15":48,"E15":48,"F15":48,"G15":48,"H15":5,"A16":42,"B16":49,"C16":49,"D16":49,"E16":49,"F16":49,"G16":49,"H16":5,"A17":8,"B17":9,"C17":9,"D17":9,"E17":9,"F17":9,"G17":9,"H17":9,"A18":37,"B18":38,"C18":38,"D18":38,"E18":38,"F18":38,"G18":38,"H18":5,"A19":37,"B19":38,"C19":38,"D19":38,"E19":38,"F19":38,"G19":38,"H19":5,"A20":37,"B20":38,"C20":38,"D20":38,"E20":38,"F20":38,"G20":38,"H20":5,"A21":50,"B21":51,"C21":51,"D21":51,"E21":51,"F21":51,"G21":51,"H21":5},
+      "values": [
+        ["瑞芯微-运营成本预测","","","","","","",""],
+        ["成本费用假设区","2023A","2024A","2025A","2026E","2027E","2028E","备注"],
+        ["合并毛利率","34.25%","37.59%","41.95%","44.00%","43.50%","43.00%","【历史轨迹】\n合并毛利率由2023A的0.3425升至2024A的0.3759、2025A的0.4195，连续改善；2026H1卖方转述的公司合并毛利率约0.4579，显示高端产品占比提升带来较强盈利弹性，但存储等原材料涨价、PCB供应与交付扰动构成反向压力。销售/管理/研发费用率分别由2023A的0.0211/0.0465/0.2511降至2024A的0.0204/0.0324/0.1799、2025A的0.0187/0.0255/0.1553，体现收入增长和费用摊薄；研发仍是最大费用项。有效税率从2023A的-0.6406（异常低基数）回到2024A的0.0278、2025A的0.0696。财务费用为净收益，分别为-0.2152/-0.6074/-0.499亿元。少数股东损益占比三年均为0；营业外收支规模较小，其他经营净收益在2024A、2025A分别为1.172/0.9685亿元，明显高于2023A的0.1052亿元。\n\n【卖方假设】\n东吴证券2026-10-28给出的合并毛利率预测为2026E/2027E/2028E 0.438/0.428/0.419，反映其对后续产品结构、成本及竞争因素的综合判断；较早的华泰证券2026-04-22预测为0.426/0.421/0.423，显示机构对毛利率路径存在分歧。另有市场评论提及2026H1毛利率约0.4579及高端产品放量对毛利率的支撑。检索到的材料没有直接给出可比的2026E—2028E销售、管理、研发费用率、有效税率和财务费用完整预测，因此这些项目无直接卖方拆分，不将公司层面盈利预测反推为卖方费用假设。\n\n【我们的数】\n2026E：合并毛利率取0.44，略高于东吴0.438，主要依据2026H1约0.4579的高毛利表现和高端产品结构改善，同时考虑原材料涨价及交付扰动使全年低于上半年水平。销售/管理/研发费用率取0.019/0.025/0.152：收入扩张继续摊薄销售及管理费用，研发绝对投入预计仍增长，故研发率仅较2025A小幅下降。有效税率取0.08，在2025A低税率基础上温和正常化；少数股东比率取0。财务费用取-0.45亿元，延续净利息收益但较2025A净收益收窄；营业外收入/支出分别取0.03/0.03亿元，其他经营净收益取0.85亿元，低于近两年水平以避免外推非经常性高基数。\n2027E：合并毛利率取0.435，较2026E小幅回落，假设高端产品结构继续支撑盈利、但成本及产品竞争抵消部分改善。销售/管理/研发费用率取0.0185/0.0245/0.148，规模效应继续释放，研发投入增长但低于收入增速。有效税率取0.09，按税收优惠和利润结构不确定性作渐进正常化；少数股东比率取0。财务费用取-0.40亿元，假设现金收益仍为净收益但边际减弱；营业外收入/支出取0.03/0.03亿元，其他经营净收益取0.85亿元，维持审慎的常态化水平。\n2028E：合并毛利率取0.43，假设产品迭代与结构改善继续提供支撑，但不把2026H1高毛利率线性外推。销售/管理/研发费用率取0.018/0.024/0.145，按业务规模扩大带来的费用杠杆逐步改善，同时保留较高研发投入。有效税率取0.10，继续小幅正常化；少数股东比率取0。财务费用取-0.35亿元，考虑资金收益率或净现金收益逐步下降；营业外收入/支出仍各取0.03亿元，其他经营净收益取0.85亿元，均不假设一次性显著增益。"],
+        ["销售费用率","2.11%","2.04%","1.87%","1.90%","1.85%","1.80%",""],
+        ["管理费用率","4.65%","3.24%","2.55%","2.50%","2.45%","2.40%",""],
+        ["研发费用率","25.11%","17.99%","15.53%","15.20%","14.80%","14.50%",""],
+        ["有效税率","-64.06%","2.78%","6.96%","8.00%","9.00%","10.00%",""],
+        ["财务费用假设","-0.22","-0.61","-0.50","-0.45","-0.40","-0.35",""],
+        ["营业外收入","0.01","0.01","0.03","0.03","0.03","0.03",""],
+        ["营业外支出","0.01","0.01","0.02","0.03","0.03","0.03",""],
+        ["少数股东比率","0.00%","0.00%","0.00%","0.00%","0.00%","0.00%",""],
+        ["其他经营净收益","0.11","1.17","0.97","0.85","0.85","0.85",""],
+        ["成本毛利区","","","","","","",""],
+        ["营业收入","21.35","31.36","44.02","62.10","80.17","98.24",""],
+        ["毛利","7.31","11.79","18.47","27.32","34.87","42.24",""],
+        ["营业成本","14.04","19.57","25.55","34.77","45.30","56.00",""],
+        ["费用区","","","","","","",""],
+        ["销售费用","0.45","0.64","0.82","1.18","1.48","1.77",""],
+        ["管理费用","0.99","1.02","1.12","1.55","1.96","2.36",""],
+        ["研发费用","5.36","5.64","6.84","9.44","11.87","14.24",""],
+        ["总费用","6.80","7.30","8.78","12.17","15.31","18.37",""]
+      ],
+      "formulas": [
+        ["","","","","","","",""],
+        ["","","","","","","",""],
+        ["","='历史财务数据'!B5/'历史财务数据'!B3","='历史财务数据'!C5/'历史财务数据'!C3","='历史财务数据'!D5/'历史财务数据'!D3","","","",""],
+        ["","='历史财务数据'!B7/'历史财务数据'!B3","='历史财务数据'!C7/'历史财务数据'!C3","='历史财务数据'!D7/'历史财务数据'!D3","","","",""],
+        ["","='历史财务数据'!B8/'历史财务数据'!B3","='历史财务数据'!C8/'历史财务数据'!C3","='历史财务数据'!D8/'历史财务数据'!D3","","","",""],
+        ["","='历史财务数据'!B9/'历史财务数据'!B3","='历史财务数据'!C9/'历史财务数据'!C3","='历史财务数据'!D9/'历史财务数据'!D3","","","",""],
+        ["","='历史财务数据'!B18/'历史财务数据'!B17","='历史财务数据'!C18/'历史财务数据'!C17","='历史财务数据'!D18/'历史财务数据'!D17","","","",""],
+        ["","='历史财务数据'!B10","='历史财务数据'!C10","='历史财务数据'!D10","","","",""],
+        ["","='历史财务数据'!B15","='历史财务数据'!C15","='历史财务数据'!D15","","","",""],
+        ["","='历史财务数据'!B16","='历史财务数据'!C16","='历史财务数据'!D16","","","",""],
+        ["","='历史财务数据'!B21/('历史财务数据'!B20+'历史财务数据'!B21)","='历史财务数据'!C21/('历史财务数据'!C20+'历史财务数据'!C21)","='历史财务数据'!D21/('历史财务数据'!D20+'历史财务数据'!D21)","","","",""],
+        ["","='历史财务数据'!B22-('历史财务数据'!B5-'历史财务数据'!B7-'历史财务数据'!B8-'历史财务数据'!B9)","='历史财务数据'!C22-('历史财务数据'!C5-'历史财务数据'!C7-'历史财务数据'!C8-'历史财务数据'!C9)","='历史财务数据'!D22-('历史财务数据'!D5-'历史财务数据'!D7-'历史财务数据'!D8-'历史财务数据'!D9)","","","",""],
+        ["","","","","","","",""],
+        ["","='收入预测'!B30","='收入预测'!C30","='收入预测'!D30","='收入预测'!E30","='收入预测'!F30","='收入预测'!G30",""],
+        ["","=B14*B3","=C14*C3","=D14*D3","=E14*E3","=F14*F3","=G14*G3",""],
+        ["","=B14-B15","=C14-C15","=D14-D15","=E14-E15","=F14-F15","=G14-G15",""],
+        ["","","","","","","",""],
+        ["","=B14*B4","=C14*C4","=D14*D4","=E14*E4","=F14*F4","=G14*G4",""],
+        ["","=B14*B5","=C14*C5","=D14*D5","=E14*E5","=F14*F5","=G14*G5",""],
+        ["","=B14*B6","=C14*C6","=D14*D6","=E14*E6","=F14*F6","=G14*G6",""],
+        ["","=B18+B19+B20","=C18+C19+C20","=D18+D19+D20","=E18+E19+E20","=F18+F19+F20","=G18+G19+G20",""]
+      ]
+    },
+    {
+      "name": "利润表预测",
+      "widths": [246,104,104,104,104,104,104,96],
+      "merges": ["A1:H1"],
+      "heights": {"1":43,"2":29,"3":25,"4":25,"5":25,"6":25,"7":25,"8":25,"9":25,"10":25,"11":25,"12":25,"13":25,"14":25,"15":25,"16":25,"17":25,"18":25,"19":25,"20":25},
+      "styleIds": {"A1":1,"B1":2,"C1":2,"D1":2,"E1":2,"F1":2,"G1":2,"H1":2,"A2":8,"B2":27,"C2":27,"D2":27,"E2":27,"F2":27,"G2":27,"H2":27,"A3":42,"B3":29,"C3":29,"D3":29,"E3":29,"F3":29,"G3":29,"H3":5,"A4":52,"B4":43,"C4":44,"D4":44,"E4":44,"F4":44,"G4":44,"H4":5,"A5":37,"B5":23,"C5":23,"D5":23,"E5":23,"F5":23,"G5":23,"H5":5,"A6":52,"B6":30,"C6":30,"D6":30,"E6":30,"F6":30,"G6":30,"H6":5,"A7":42,"B7":29,"C7":29,"D7":29,"E7":29,"F7":29,"G7":29,"H7":5,"A8":37,"B8":23,"C8":23,"D8":23,"E8":23,"F8":23,"G8":23,"H8":5,"A9":37,"B9":23,"C9":23,"D9":23,"E9":23,"F9":23,"G9":23,"H9":5,"A10":37,"B10":23,"C10":23,"D10":23,"E10":23,"F10":23,"G10":23,"H10":5,"A11":42,"B11":29,"C11":29,"D11":29,"E11":29,"F11":29,"G11":29,"H11":39,"A12":37,"B12":23,"C12":23,"D12":23,"E12":23,"F12":23,"G12":23,"H12":5,"A13":37,"B13":23,"C13":23,"D13":23,"E13":23,"F13":23,"G13":23,"H13":5,"A14":37,"B14":23,"C14":23,"D14":23,"E14":23,"F14":23,"G14":23,"H14":5,"A15":37,"B15":23,"C15":23,"D15":23,"E15":38,"F15":38,"G15":38,"H15":39,"A16":37,"B16":23,"C16":23,"D16":23,"E16":23,"F16":23,"G16":23,"H16":5,"A17":37,"B17":23,"C17":23,"D17":23,"E17":23,"F17":23,"G17":23,"H17":5,"A18":47,"B18":32,"C18":32,"D18":32,"E18":48,"F18":48,"G18":48,"H18":5,"A19":52,"B19":43,"C19":44,"D19":44,"E19":44,"F19":44,"G19":44,"H19":5,"A20":47,"B20":33,"C20":33,"D20":33,"E20":33,"F20":33,"G20":33,"H20":5},
+      "values": [
+        ["瑞芯微-利润表预测","","","","","","",""],
+        ["利润表预测","2023A","2024A","2025A","2026E","2027E","2028E","备注"],
+        ["营业收入","21.35","31.36","44.02","62.10","80.17","98.24",""],
+        ["营业收入同比","-","46.94%","40.36%","41.06%","29.11%","22.53%",""],
+        ["营业成本","14.04","19.57","25.55","34.77","45.30","56.00",""],
+        ["合并毛利率","34.25%","37.59%","41.95%","44.00%","43.50%","43.00%",""],
+        ["毛利","7.31","11.79","18.47","27.32","34.87","42.24",""],
+        ["销售费用","0.45","0.64","0.82","1.18","1.48","1.77",""],
+        ["管理费用","0.99","1.02","1.12","1.55","1.96","2.36",""],
+        ["研发费用","5.36","5.64","6.84","9.44","11.87","14.24",""],
+        ["息税前利润","0.61","5.66","10.65","16.00","20.41","24.72","息税前利润＝毛利－销售费用－管理费用－研发费用＋其他经营净收益"],
+        ["财务费用","-0.22","-0.61","-0.50","-0.45","-0.40","-0.35",""],
+        ["营业外收入","0.01","0.01","0.03","0.03","0.03","0.03",""],
+        ["营业外支出","0.01","0.01","0.02","0.03","0.03","0.03",""],
+        ["税前利润","0.82","6.12","11.18","16.45","20.81","25.07","税前利润＝息税前利润－财务费用＋营业外收入－营业外支出"],
+        ["所得税费用","-0.53","0.17","0.78","1.32","1.87","2.51",""],
+        ["少数股东损益","0.00","0.00","0.00","0.00","0.00","0.00",""],
+        ["归母净利润","1.35","5.95","10.40","15.14","18.94","22.56",""],
+        ["归母净利润同比","-","341.00%","74.82%","45.54%","25.13%","19.14%",""],
+        ["EPS","0.32","1.42","2.48","3.57","4.47","5.33",""]
+      ],
+      "formulas": [
+        ["","","","","","","",""],
+        ["","","","","","","",""],
+        ["","='历史财务数据'!B3","='历史财务数据'!C3","='历史财务数据'!D3","='收入预测'!E30","='收入预测'!F30","='收入预测'!G30",""],
+        ["","","=C3/B3-1","=D3/C3-1","=E3/D3-1","=F3/E3-1","=G3/F3-1",""],
+        ["","='历史财务数据'!B4","='历史财务数据'!C4","='历史财务数据'!D4","='运营成本预测'!E16","='运营成本预测'!F16","='运营成本预测'!G16",""],
+        ["","='运营成本预测'!B3","='运营成本预测'!C3","='运营成本预测'!D3","='运营成本预测'!E3","='运营成本预测'!F3","='运营成本预测'!G3",""],
+        ["","='历史财务数据'!B5","='历史财务数据'!C5","='历史财务数据'!D5","='运营成本预测'!E15","='运营成本预测'!F15","='运营成本预测'!G15",""],
+        ["","='历史财务数据'!B7","='历史财务数据'!C7","='历史财务数据'!D7","='运营成本预测'!E18","='运营成本预测'!F18","='运营成本预测'!G18",""],
+        ["","='历史财务数据'!B8","='历史财务数据'!C8","='历史财务数据'!D8","='运营成本预测'!E19","='运营成本预测'!F19","='运营成本预测'!G19",""],
+        ["","='历史财务数据'!B9","='历史财务数据'!C9","='历史财务数据'!D9","='运营成本预测'!E20","='运营成本预测'!F20","='运营成本预测'!G20",""],
+        ["","='历史财务数据'!B22","='历史财务数据'!C22","='历史财务数据'!D22","=E7-E8-E9-E10+'运营成本预测'!E12","=F7-F8-F9-F10+'运营成本预测'!F12","=G7-G8-G9-G10+'运营成本预测'!G12",""],
+        ["","='历史财务数据'!B10","='历史财务数据'!C10","='历史财务数据'!D10","='运营成本预测'!E8","='运营成本预测'!F8","='运营成本预测'!G8",""],
+        ["","='历史财务数据'!B15","='历史财务数据'!C15","='历史财务数据'!D15","='运营成本预测'!E9","='运营成本预测'!F9","='运营成本预测'!G9",""],
+        ["","='历史财务数据'!B16","='历史财务数据'!C16","='历史财务数据'!D16","='运营成本预测'!E10","='运营成本预测'!F10","='运营成本预测'!G10",""],
+        ["","='历史财务数据'!B17","='历史财务数据'!C17","='历史财务数据'!D17","=E11-E12+E13-E14","=F11-F12+F13-F14","=G11-G12+G13-G14",""],
+        ["","='历史财务数据'!B18","='历史财务数据'!C18","='历史财务数据'!D18","=E15*'运营成本预测'!E7","=F15*'运营成本预测'!F7","=G15*'运营成本预测'!G7",""],
+        ["","='历史财务数据'!B21","='历史财务数据'!C21","='历史财务数据'!D21","=(E15-E16)*'运营成本预测'!E11","=(F15-F16)*'运营成本预测'!F11","=(G15-G16)*'运营成本预测'!G11",""],
+        ["","='历史财务数据'!B20","='历史财务数据'!C20","='历史财务数据'!D20","=E15-E16-E17","=F15-F16-F17","=G15-G16-G17",""],
+        ["","","=C18/B18-1","=D18/C18-1","=E18/D18-1","=F18/E18-1","=G18/F18-1",""],
+        ["","='历史财务数据'!B23","='历史财务数据'!C23","='历史财务数据'!D23","=E18*100/'历史财务数据'!B36","=F18*100/'历史财务数据'!B36","=G18*100/'历史财务数据'!B36",""]
+      ]
+    },
+    {
+      "name": "相对估值预测",
+      "widths": [186,156,111,111,111,276],
+      "merges": ["C29:F29","A1:F1"],
+      "heights": {"1":43,"2":29,"3":25,"4":25,"5":25,"6":25,"7":25,"8":25,"9":25,"10":25,"11":25,"12":25,"13":25,"14":25,"15":25,"16":25,"17":25,"18":25,"19":29,"20":25,"21":25,"22":25,"23":25,"24":25,"25":25,"26":25,"27":25,"28":25,"29":101,"30":29,"31":25,"32":25,"33":25,"34":25,"35":25,"36":25,"37":25,"38":25},
+      "styleIds": {"A1":1,"B1":2,"C1":2,"D1":2,"E1":2,"F1":2,"A2":8,"B2":27,"C2":27,"D2":27,"E2":27,"F2":5,"A3":37,"B3":53,"C3":38,"D3":38,"E3":38,"F3":5,"A4":37,"B4":53,"C4":38,"D4":38,"E4":38,"F4":5,"A5":37,"B5":53,"C5":38,"D5":38,"E5":38,"F5":5,"A6":37,"B6":53,"C6":38,"D6":38,"E6":38,"F6":5,"A7":37,"B7":53,"C7":38,"D7":38,"E7":38,"F7":5,"A8":37,"B8":53,"C8":38,"D8":38,"E8":38,"F8":5,"A9":37,"B9":53,"C9":38,"D9":38,"E9":38,"F9":5,"A10":37,"B10":53,"C10":38,"D10":38,"E10":38,"F10":5,"A11":37,"B11":53,"C11":38,"D11":38,"E11":38,"F11":5,"A12":37,"B12":53,"C12":38,"D12":38,"E12":38,"F12":5,"A13":37,"B13":53,"C13":38,"D13":38,"E13":38,"F13":5,"A14":37,"B14":53,"C14":38,"D14":38,"E14":38,"F14":5,"A15":37,"B15":53,"C15":38,"D15":38,"E15":5,"F15":5,"A16":37,"B16":5,"C16":38,"D16":38,"E16":38,"F16":5,"A17":37,"B17":5,"C17":23,"D17":23,"E17":23,"F17":5,"A18":5,"B18":5,"C18":5,"D18":5,"E18":5,"F18":5,"A19":8,"B19":27,"C19":27,"D19":27,"E19":27,"F19":27,"A20":37,"B20":54,"C20":54,"D20":38,"E20":39,"F20":39,"A21":37,"B21":54,"C21":54,"D21":38,"E21":39,"F21":39,"A22":37,"B22":54,"C22":54,"D22":38,"E22":39,"F22":39,"A23":37,"B23":54,"C23":54,"D23":38,"E23":39,"F23":39,"A24":37,"B24":54,"C24":54,"D24":38,"E24":39,"F24":39,"A25":37,"B25":54,"C25":54,"D25":38,"E25":39,"F25":39,"A26":37,"B26":54,"C26":54,"D26":38,"E26":39,"F26":39,"A27":42,"B27":55,"C27":55,"D27":5,"E27":5,"F27":5,"A28":42,"B28":55,"C28":5,"D28":5,"E28":5,"F28":5,"A29":42,"B29":56,"C29":7,"D29":5,"E29":5,"F29":5,"A30":8,"B30":27,"C30":27,"D30":27,"E30":27,"F30":27,"A31":42,"B31":49,"C31":55,"D31":57,"E31":58,"F31":5,"A32":42,"B32":59,"C32":55,"D32":57,"E32":58,"F32":5,"A33":42,"B33":49,"C33":55,"D33":57,"E33":58,"F33":5,"A34":37,"B34":54,"C34":5,"D34":5,"E34":5,"F34":5,"A35":31,"B35":60,"C35":5,"D35":5,"E35":5,"F35":5,"A36":31,"B36":61,"C36":5,"D36":5,"E36":5,"F36":5,"A37":31,"B37":62,"C37":5,"D37":5,"E37":5,"F37":5,"A38":37,"B38":63,"C38":5,"D38":5,"E38":5,"F38":5},
+      "values": [
+        ["瑞芯微-相对估值预测","","","","",""],
+        ["机构一致性预期","发布日期","2026E总营收","2027E总营收","2028E总营收",""],
+        ["东吴证券","2026-10-28","66.03","81.22","101.52",""],
+        ["华金证券","2026-10-28","63.68","84.61","106.54",""],
+        ["BofA Global Research","2026-10-27","44.02","61.57","79.66",""],
+        ["甬兴证券","2026-09-04","61.56","83.05","107.92",""],
+        ["西南证券","2026-08-27","61.58","79.45","95.97",""],
+        ["山西证券","2026-08-25","66.71","85.58","104.24",""],
+        ["财信证券","2026-08-20","59.08","74.18","91.60",""],
+        ["华泰证券","2026-08-19","65.02","85.11","106.98",""],
+        ["中邮证券","2026-05-28","57.19","71.52","94.31",""],
+        ["中银国际证券","2026-04-28","57.19","69.29","81.62",""],
+        ["国盛证券","2026-04-22","57.11","71.53","86.28",""],
+        ["东海证券","2026-04-20","57.98","75.55","96.66",""],
+        ["西部证券","2026-03-25","55.21","68.69","",""],
+        ["一致预期_中位数","","59.08","75.55","96.31",""],
+        ["本模型预测","","62.10","80.17","98.24",""],
+        ["","","","","",""],
+        ["核心同业池","2026E PE","PE_TTM","总市值","单位","备注"],
+        ["全志科技（300458）","41.43x","41.61x","267.54","亿元","通用应用处理器SoC及汽车、工业等场景与本公司主芯片业务相近，但产品组合及端侧AI协处理器布局不同；2026E PE为41.43倍。"],
+        ["星宸科技（301536）","21.33x","22.02x","367.78","亿元","视觉与边缘AI SoC可比本公司的视觉处理和端侧AI应用，但业务更集中于安防及视觉处理；2026E PE为21.33倍。"],
+        ["晶晨股份（688099）","26.29x","26.78x","393.31","亿元","多媒体及智能终端SoC与本公司消费级及智能终端芯片有较强交集，但产品更侧重电视、机顶盒等影音终端；2026E PE为26.29倍。"],
+        ["乐鑫科技（688018）","55.68x","55.81x","376.19","亿元","AIoT处理与连接芯片、开发者生态与本公司平台化及端侧应用有可比性，但计算侧重和应用结构不同；2026E PE为55.68倍，属较高的平台型估值参照，不宜等权套用。"],
+        ["炬芯科技（688049）","35.67x","35.46x","83.26","亿元","低功耗音频、蓝牙及端侧AIoT SoC与本公司音频及周边芯片有交集，但其产品功耗、终端和应用更聚焦；2026E PE为35.67倍。"],
+        ["恒玄科技（688608）","96.19x","96.84x","298.22","亿元","低功耗音频及穿戴SoC可补充对照本公司的音频芯片和AIoT业务，但产品结构更偏消费穿戴；2026E PE为96.19倍，近期财务指标同比偏弱，可能包含盈利修复预期，属高倍数离散参照。"],
+        ["富瀚微（300613）","18.51x","18.70x","156.70","亿元","视频处理与智能视觉芯片可比本公司视觉处理及边缘AI场景，但应用集中度更高、产品平台宽度较窄；2026E PE为18.51倍。"],
+        ["核心池均值","42.16x","42.46x","","",""],
+        ["核心池中位数","35.67x","","","",""],
+        ["模型给定PE","38.00x","主要参照应用处理器、视觉及多媒体SoC同业约18.51—41.43倍的2026E PE区间，并将平台型估值较高的乐鑫作为上沿参照；本公司预测首年收入与EPS增速较快、毛利率和净利率处于较高水平，给予38倍以体现增长及平台能力溢价，同时对交付、竞争与预测兑现风险保留折价。","","",""],
+        ["综合估值预测","PE调整系数","目标PE","目标价","较现价空间",""],
+        ["悲观","0.85","32.30x","115.47","-45.94%",""],
+        ["中性","1.00","38.00x","135.84","-36.40%",""],
+        ["乐观","1.15","43.70x","156.22","-26.86%",""],
+        ["目标PE","38.00x","","","",""],
+        ["相对估值区间","115.47 - 156.22","","","",""],
+        ["相对估值目标价","135.84","","","",""],
+        ["较现价空间","-36.40%","","","",""],
+        ["投资评级","观察","","","",""]
+      ],
+      "formulas": [
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","=MEDIAN(C3:C15)","=MEDIAN(D3:D15)","=MEDIAN(E3:E15)",""],
+        ["","","='收入预测'!E30","='收入预测'!F30","='收入预测'!G30",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","=AVERAGE(B20:B26)","=AVERAGE(C20:C26)","","",""],
+        ["","=MEDIAN(B20:B26)","","","",""],
+        ["","","","","",""],
+        ["","","","","",""],
+        ["","=B32*0.85","=B31*$B$29","=C31*'利润表预测'!E20","=D31/历史财务数据!B35-1",""],
+        ["","","=B32*$B$29","=C32*'利润表预测'!E20","=D32/历史财务数据!B35-1",""],
+        ["","=B32*1.15","=B33*$B$29","=C33*'利润表预测'!E20","=D33/历史财务数据!B35-1",""],
+        ["","=C32","","","",""],
+        ["","=TEXT(D31,\"#,##0.00\")&\" - \"&TEXT(D33,\"#,##0.00\")","","","",""],
+        ["","=D32","","","",""],
+        ["","=E32","","","",""],
+        ["","=IF(B37>=0.15,\"买入\",\"观察\")","","","",""]
+      ]
+    },
+    {
+      "name": "DCF估值",
+      "widths": [246,104,104,104,104,201,28,246,104,104,276],
+      "merges": ["B47:C47","A66:F66","B46:C46","A12:F12","B31:C31","H24:K24","B27:C27","A26:F26","D31:E31","A1:K1","B43:C43","B39:C39","D27:E27","B42:C42","D32:E32","A63:F63","B38:C38","B44:C44","B29:C29","H9:K9","B34:C34","B37:C37","B28:C28","D28:E28","B40:C40","A48:F48","A64:F64","A49:F49","B30:C30","D30:E30","B33:C33","D29:E29","B45:C45","H2:K2","B36:C36","H16:K16","B32:C32","B41:C41","B35:C35"],
+      "heights": {"1":43,"2":29,"3":29,"4":29,"5":29,"6":29,"7":25,"8":25,"9":29,"10":29,"11":29,"12":29,"13":25,"14":29,"15":25,"16":29,"17":29,"18":29,"19":25,"20":25,"21":25,"22":25,"23":25,"24":29,"25":29,"26":29,"27":29,"28":29,"29":25,"30":25,"31":25,"32":25,"33":25,"34":25,"35":25,"36":25,"37":25,"38":25,"39":25,"40":25,"41":25,"42":25,"43":25,"44":25,"45":25,"46":25,"47":25,"48":29,"49":29,"50":29,"51":25,"52":25,"53":25,"54":25,"55":25,"56":25,"57":29,"58":25,"59":25,"60":25,"61":25,"62":25,"63":29,"64":130,"65":25,"66":35},
+      "styleIds": {"A1":1,"B1":2,"C1":2,"D1":2,"E1":2,"F1":2,"G1":2,"H1":2,"I1":2,"J1":2,"K1":2,"A2":8,"B2":27,"C2":27,"D2":27,"E2":27,"F2":27,"G2":5,"H2":27,"I2":9,"J2":9,"K2":9,"A3":39,"B3":23,"C3":23,"D3":23,"E3":38,"F3":39,"G3":5,"H3":35,"I3":35,"J3":35,"K3":35,"A4":39,"B4":23,"C4":23,"D4":23,"E4":5,"F4":5,"G4":5,"H4":39,"I4":45,"J4":5,"K4":39,"A5":39,"B5":46,"C5":46,"D5":46,"E5":5,"F5":5,"G5":5,"H5":39,"I5":46,"J5":5,"K5":39,"A6":47,"B6":48,"C6":48,"D6":48,"E6":48,"F6":5,"G6":5,"H6":39,"I6":45,"J6":5,"K6":39,"A7":39,"B7":45,"C7":45,"D7":45,"E7":45,"F7":5,"G7":5,"H7":39,"I7":44,"J7":5,"K7":39,"A8":39,"B8":45,"C8":45,"D8":45,"E8":45,"F8":5,"G8":5,"H8":5,"I8":5,"J8":5,"K8":5,"A9":39,"B9":45,"C9":45,"D9":45,"E9":45,"F9":39,"G9":5,"H9":8,"I9":9,"J9":9,"K9":9,"A10":39,"B10":45,"C10":45,"D10":45,"E10":45,"F10":5,"G10":5,"H10":39,"I10":39,"J10":5,"K10":39,"A11":5,"B11":5,"C11":5,"D11":5,"E11":5,"F11":5,"G11":5,"H11":39,"I11":45,"J11":5,"K11":39,"A12":8,"B12":9,"C12":9,"D12":9,"E12":9,"F12":9,"G12":5,"H12":39,"I12":64,"J12":5,"K12":39,"A13":39,"B13":38,"C13":38,"D13":38,"E13":38,"F13":5,"G13":5,"H13":39,"I13":44,"J13":5,"K13":5,"A14":39,"B14":38,"C14":38,"D14":38,"E14":38,"F14":5,"G14":5,"H14":39,"I14":45,"J14":5,"K14":39,"A15":47,"B15":48,"C15":48,"D15":48,"E15":48,"F15":5,"G15":5,"H15":5,"I15":5,"J15":5,"K15":5,"A16":39,"B16":38,"C16":38,"D16":38,"E16":38,"F16":5,"G16":5,"H16":8,"I16":9,"J16":9,"K16":9,"A17":39,"B17":38,"C17":38,"D17":38,"E17":38,"F17":5,"G17":5,"H17":39,"I17":38,"J17":39,"K17":39,"A18":39,"B18":23,"C18":38,"D18":38,"E18":38,"F18":5,"G18":5,"H18":39,"I18":38,"J18":39,"K18":39,"A19":47,"B19":48,"C19":48,"D19":48,"E19":48,"F19":5,"G19":5,"H19":39,"I19":44,"J19":5,"K19":5,"A20":39,"B20":65,"C20":65,"D20":65,"E20":5,"F20":5,"G20":5,"H20":39,"I20":44,"J20":5,"K20":5,"A21":39,"B21":44,"C21":44,"D21":44,"E21":66,"F21":39,"G21":5,"H21":5,"I21":5,"J21":5,"K21":5,"A22":39,"B22":38,"C22":38,"D22":38,"E22":5,"F22":5,"G22":5,"H22":47,"I22":67,"J22":68,"K22":47,"A23":39,"B23":38,"C23":38,"D23":38,"E23":5,"F23":5,"G23":5,"H23":5,"I23":5,"J23":5,"K23":5,"A24":47,"B24":48,"C24":48,"D24":48,"E24":68,"F24":5,"G24":5,"H24":8,"I24":9,"J24":9,"K24":9,"A25":5,"B25":5,"C25":5,"D25":5,"E25":5,"F25":5,"G25":5,"H25":39,"I25":69,"J25":5,"K25":39,"A26":8,"B26":9,"C26":9,"D26":9,"E26":9,"F26":9,"G26":5,"H26":39,"I26":38,"J26":39,"K26":39,"A27":39,"B27":38,"C27":5,"D27":39,"E27":5,"F27":44,"G27":5,"H27":39,"I27":46,"J27":5,"K27":39,"A28":39,"B28":38,"C28":5,"D28":39,"E28":5,"F28":45,"G28":5,"H28":39,"I28":46,"J28":5,"K28":5,"A29":39,"B29":38,"C29":5,"D29":39,"E29":5,"F29":65,"G29":5,"H29":5,"I29":5,"J29":5,"K29":5,"A30":39,"B30":38,"C30":5,"D30":39,"E30":5,"F30":45,"G30":5,"H30":5,"I30":5,"J30":5,"K30":5,"A31":47,"B31":48,"C31":68,"D31":39,"E31":5,"F31":45,"G31":5,"H31":5,"I31":5,"J31":5,"K31":5,"A32":39,"B32":44,"C32":5,"D32":39,"E32":5,"F32":45,"G32":5,"H32":5,"I32":5,"J32":5,"K32":5,"A33":39,"B33":46,"C33":5,"D33":5,"E33":5,"F33":5,"G33":5,"H33":5,"I33":5,"J33":5,"K33":5,"A34":39,"B34":46,"C34":5,"D34":5,"E34":5,"F34":5,"G34":5,"H34":5,"I34":5,"J34":5,"K34":5,"A35":39,"B35":46,"C35":5,"D35":5,"E35":5,"F35":5,"G35":5,"H35":5,"I35":5,"J35":5,"K35":5,"A36":39,"B36":46,"C36":5,"D36":5,"E36":5,"F36":5,"G36":5,"H36":5,"I36":5,"J36":5,"K36":5,"A37":39,"B37":46,"C37":5,"D37":5,"E37":5,"F37":5,"G37":5,"H37":5,"I37":5,"J37":5,"K37":5,"A38":39,"B38":46,"C38":5,"D38":5,"E38":5,"F38":5,"G38":5,"H38":5,"I38":5,"J38":5,"K38":5,"A39":39,"B39":46,"C39":5,"D39":5,"E39":5,"F39":5,"G39":5,"H39":5,"I39":5,"J39":5,"K39":5,"A40":39,"B40":38,"C40":5,"D40":5,"E40":5,"F40":5,"G40":5,"H40":5,"I40":5,"J40":5,"K40":5,"A41":47,"B41":48,"C41":68,"D41":5,"E41":5,"F41":5,"G41":5,"H41":5,"I41":5,"J41":5,"K41":5,"A42":39,"B42":23,"C42":5,"D42":5,"E42":5,"F42":5,"G42":5,"H42":5,"I42":5,"J42":5,"K42":5,"A43":39,"B43":38,"C43":5,"D43":5,"E43":5,"F43":5,"G43":5,"H43":5,"I43":5,"J43":5,"K43":5,"A44":39,"B44":69,"C44":5,"D44":5,"E44":5,"F44":5,"G44":5,"H44":5,"I44":5,"J44":5,"K44":5,"A45":47,"B45":70,"C45":68,"D45":5,"E45":5,"F45":5,"G45":5,"H45":5,"I45":5,"J45":5,"K45":5,"A46":39,"B46":44,"C46":5,"D46":5,"E46":5,"F46":5,"G46":5,"H46":5,"I46":5,"J46":5,"K46":5,"A47":39,"B47":38,"C47":5,"D47":5,"E47":5,"F47":5,"G47":5,"H47":5,"I47":5,"J47":5,"K47":5,"A48":7,"B48":5,"C48":5,"D48":5,"E48":5,"F48":5,"G48":5,"H48":5,"I48":5,"J48":5,"K48":5,"A49":8,"B49":9,"C49":9,"D49":9,"E49":9,"F49":9,"G49":5,"H49":5,"I49":5,"J49":5,"K49":5,"A50":35,"B50":71,"C50":71,"D50":71,"E50":71,"F50":71,"G50":5,"H50":5,"I50":5,"J50":5,"K50":5,"A51":44,"B51":72,"C51":72,"D51":72,"E51":72,"F51":72,"G51":5,"H51":5,"I51":5,"J51":5,"K51":5,"A52":44,"B52":72,"C52":72,"D52":72,"E52":72,"F52":72,"G52":5,"H52":5,"I52":5,"J52":5,"K52":5,"A53":44,"B53":72,"C53":72,"D53":70,"E53":72,"F53":72,"G53":5,"H53":5,"I53":5,"J53":5,"K53":5,"A54":44,"B54":72,"C54":72,"D54":72,"E54":72,"F54":72,"G54":5,"H54":5,"I54":5,"J54":5,"K54":5,"A55":44,"B55":72,"C55":72,"D55":72,"E55":72,"F55":72,"G55":5,"H55":5,"I55":5,"J55":5,"K55":5,"A56":5,"B56":5,"C56":5,"D56":5,"E56":5,"F56":5,"G56":5,"H56":5,"I56":5,"J56":5,"K56":5,"A57":35,"B57":73,"C57":73,"D57":73,"E57":73,"F57":73,"G57":5,"H57":5,"I57":5,"J57":5,"K57":5,"A58":39,"B58":38,"C58":38,"D58":38,"E58":38,"F58":38,"G58":5,"H58":5,"I58":5,"J58":5,"K58":5,"A59":39,"B59":38,"C59":38,"D59":38,"E59":38,"F59":38,"G59":5,"H59":5,"I59":5,"J59":5,"K59":5,"A60":39,"B60":38,"C60":38,"D60":38,"E60":38,"F60":38,"G60":5,"H60":5,"I60":5,"J60":5,"K60":5,"A61":39,"B61":38,"C61":38,"D61":38,"E61":38,"F61":38,"G61":5,"H61":5,"I61":5,"J61":5,"K61":5,"A62":5,"B62":5,"C62":5,"D62":5,"E62":5,"F62":5,"G62":5,"H62":5,"I62":5,"J62":5,"K62":5,"A63":8,"B63":9,"C63":9,"D63":9,"E63":9,"F63":9,"G63":5,"H63":5,"I63":5,"J63":5,"K63":5,"A64":7,"B64":5,"C64":5,"D64":5,"E64":5,"F64":5,"G64":5,"H64":5,"I64":5,"J64":5,"K64":5,"A65":5,"B65":5,"C65":5,"D65":5,"E65":5,"F65":5,"G65":5,"H65":5,"I65":5,"J65":5,"K65":5,"A66":7,"B66":5,"C66":5,"D66":5,"E66":5,"F66":5,"G66":5,"H66":5,"I66":5,"J66":5,"K66":5},
+      "values": [
+        ["瑞芯微-DCF估值","","","","","","","","","",""],
+        ["现金流假设","2026E","2027E","2028E","稳态","备注","","WACC 构建","","",""],
+        ["营业收入","62.10","80.17","98.24","101.19","金额：亿元；价格：元/股","","股权成本","数值","单位","说明"],
+        ["原模型经营利润","16.00","20.41","24.72","","","","无风险利率 Rf","1.60%","","与现金流币种匹配的长期国债利率"],
+        ["经营口径调整","0.00","0.00","0.00","","","","采用 Beta","2.22","","沿用股票与市场指数回归结果"],
+        ["经营EBIT","16.00","20.41","24.72","24.28","","","股权风险溢价 ERP","5.50%","","权益风险溢价假设"],
+        ["经营税率","8.00%","9.00%","10.00%","15.00%","","","股权成本 Ke","13.84%","","Rf＋Beta×ERP"],
+        ["D&A/收入","3.90%","3.70%","3.60%","3.50%","","","","","",""],
+        ["Capex/收入","7.20%","6.00%","5.30%","4.50%","Capex判断见本页下方","","债务成本","","",""],
+        ["ΔONWC/Δ收入","15.00%","15.00%","15.00%","15.00%","","","债务成本口径","利差法","","选择利差法或直接融资成本"],
+        ["","","","","","","","信用利差","1.40%","","利差法：Kd＝Rf＋信用利差"],
+        ["FCFF与折现","","","","","","","直接融资成本","-","","直接融资成本模式采用此值"],
+        ["经营EBIT（现金流起点）","16.00","20.41","24.72","24.28","","","税前债务成本 Kd","3.00%","",""],
+        ["经营现金税","1.28","1.84","2.47","3.64","","","税盾税率","25.00%","","与经营税率分开设置"],
+        ["NOPAT","14.72","18.57","22.25","20.64","","","","","",""],
+        ["D&A","2.42","2.97","3.54","3.54","","","资本结构","","",""],
+        ["Capex","4.47","4.81","5.21","4.55","","","股权市值","904.33","亿元","按市值计；多股类采用全公司口径"],
+        ["ΔONWC","2.71","2.71","2.71","0.44","","","有息债务","0.73","亿元","与DCF股权价值桥接使用同一债务"],
+        ["FCFF","9.96","14.02","17.87","19.19","","","股权权重","99.92%","",""],
+        ["财年末","2026-12-31","2027-12-31","2028-12-31","","","","债务权重","0.08%","",""],
+        ["剩余期间比例","14.25%","100.00%","100.00%","","首年按剩余天数折算","","","","",""],
+        ["折现期限（年）","0.14","1.14","2.14","","","","WACC","13.83%","","按市值加权"],
+        ["折现因子","0.98","0.86","0.76","","","","","","",""],
+        ["FCFF现值","1.39","12.09","13.54","","","","行情与换算输入","","",""],
+        ["","","","","","","","当前股价","213.59","","引用原模型行情"],
+        ["终值与归母股权价值","","","","","","","普通股总数","423.40","百万股","按普通股口径计算"],
+        ["显性期现值","27.02","","WACC","","13.83%","","报表币种兑交易币种","1.00","","每单位报表币种兑换的交易币种"],
+        ["正常化FCFF","19.19","","永续增长率g","","3.00%","","每交易单位普通股数","1.00","",""],
+        ["终值","177.19","","估值日","","2026-11-09","","","","",""],
+        ["终值现值","134.23","","稳态经营利润率","","24.00%","","","","",""],
+        ["经营价值","161.26","","WACC敏感性步长","","0.50%","","","","",""],
+        ["终值占比","83.24%","","g敏感性步长","","0.25%","","","","",""],
+        ["现金余额","10.05","","","","","","","","",""],
+        ["减：受限现金","0.00","","","","","","","","",""],
+        ["减：最低经营现金","2.00","","","","","","","","",""],
+        ["加：非经营资产","17.17","","","","","","","","",""],
+        ["减：有息债务","0.73","","","","","","","","",""],
+        ["减：非控股权益","0.00","","","","","","","","",""],
+        ["减：其他权益索取权","0.00","","","","","","","","",""],
+        ["股权价值净调整","24.49","","","","","","","","",""],
+        ["归母股权价值","185.75","","","","","","","","",""],
+        ["普通股总数（百万股）","423.40","","","","","","","","",""],
+        ["交易单位换算系数","1.00","","","","","","","","",""],
+        ["当前股价","213.59","","","","","","","","",""],
+        ["DCF每股价值","43.87","","","","","","","","",""],
+        ["DCF较现价空间","-79.46%","","","","","","","","",""],
+        ["DCF可用性","采用估计","","","","","","","","",""],
+        ["显性期现值为负时，终值占比可超过100%","","","","","","","","","",""],
+        ["WACC × g 每股价值敏感性","","","","","","","","","",""],
+        ["WACC / g","2.50%","2.75%","3.00%","3.25%","3.50%","","","","",""],
+        ["12.83%","46.09","46.95","47.85","48.80","49.80","","","","",""],
+        ["13.33%","44.18","44.95","45.77","46.62","47.51","","","","",""],
+        ["13.83%","42.44","43.14","43.87","44.64","45.44","","","","",""],
+        ["14.33%","40.84","41.48","42.14","42.84","43.57","","","","",""],
+        ["14.83%","39.38","39.96","40.56","41.19","41.85","","","","",""],
+        ["","","","","","","","","","",""],
+        ["稳态现金流校准","2.50%","2.75%","3.00%","3.25%","3.50%","","","","",""],
+        ["稳态收入","100.69","100.94","101.19","101.43","101.68","","","","",""],
+        ["稳态NOPAT","20.54","20.59","20.64","20.69","20.74","","","","",""],
+        ["稳态净再投资","1.38","1.41","1.45","1.49","1.53","","","","",""],
+        ["正常化FCFF（敏感性辅助）","19.17","19.18","19.19","19.20","19.21","","","","",""],
+        ["","","","","","","","","","",""],
+        ["Capex判断与主要来源","","","","","","","","","",""],
+        ["历史现金购建长期资产支出占收入比为2023A 7.6%、2024A 4.0%、2025A 5.3%；2026年前三季度支出3.34亿元、收入44.49亿元，约7.5%。结合2025年固定资产采购增加以及购买IP、光罩等投入，Capex/收入取2026E 7.2%（约4.47亿元）、2027E 6.0%（约4.81亿元）、2028E 5.3%（约5.21亿元），稳态4.5%；公司未披露可量化的未来Capex年度预算，均属研究估计。年报显示研发支出全部费用化、无资本化研发项目，故未重复将费用化研发作为Capex扣除。","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["来源：瑞芯微 2026-04-15 瑞芯微：2025年年度报告","","","","","","","","","",""]
+      ],
+      "formulas": [
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","='利润表预测'!E3","='利润表预测'!F3","='利润表预测'!G3","=IF(COUNT(D3,$F$28)=2,D3*(1+$F$28),\"-\")","","","","","",""],
+        ["","='利润表预测'!E11","='利润表预测'!F11","='利润表预测'!G11","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","=IF(COUNT(B4:B5)=2,B4+B5,\"-\")","=IF(COUNT(C4:C5)=2,C4+C5,\"-\")","=IF(COUNT(D4:D5)=2,D4+D5,\"-\")","=IF(COUNT(E3,$F$30)=2,E3*$F$30,\"-\")","","","","","",""],
+        ["","","","","","","","","=IF(AND(COUNT(I4:I6)=3,I6>=0),I4+I5*I6,\"-\")","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","=B6","=C6","=D6","=E6","","","","=IF(I10=\"利差法\",IF(AND(COUNT(I4,I11)=2,I11>=0),I4+I11,\"-\"),IF(AND(I10=\"直接融资成本\",COUNT(I12)=1,I12>=0),I12,\"-\"))","",""],
+        ["","=IF(AND(COUNT(B6:B7)=2,B7>=0,B7\u003c=1),MAX(B6,0)*B7,\"-\")","=IF(AND(COUNT(C6:C7)=2,C7>=0,C7\u003c=1),MAX(C6,0)*C7,\"-\")","=IF(AND(COUNT(D6:D7)=2,D7>=0,D7\u003c=1),MAX(D6,0)*D7,\"-\")","=IF(AND(COUNT(E6:E7)=2,E7>=0,E7\u003c=1),MAX(E6,0)*E7,\"-\")","","","","","",""],
+        ["","=IF(COUNT(B6,B14)=2,B6-B14,\"-\")","=IF(COUNT(C6,C14)=2,C6-C14,\"-\")","=IF(COUNT(D6,D14)=2,D6-D14,\"-\")","=IF(COUNT(E6,E14)=2,E6-E14,\"-\")","","","","","",""],
+        ["","=IF(AND(COUNT(B3,B8)=2,B8>=0),B3*B8,\"-\")","=IF(AND(COUNT(C3,C8)=2,C8>=0),C3*C8,\"-\")","=IF(AND(COUNT(D3,D8)=2,D8>=0),D3*D8,\"-\")","=IF(AND(COUNT(E3,E8)=2,E8>=0),E3*E8,\"-\")","","","","","",""],
+        ["","=IF(AND(COUNT(B3,B9)=2,B9>=0),B3*B9,\"-\")","=IF(AND(COUNT(C3,C9)=2,C9>=0),C3*C9,\"-\")","=IF(AND(COUNT(D3,D9)=2,D9>=0),D3*D9,\"-\")","=IF(AND(COUNT(E3,E9)=2,E9>=0),E3*E9,\"-\")","","","","=IF(AND(COUNT(I25:I28)=4,I26>0,I27>0,I28>0),I25*I26/I28/100/I27,\"-\")","",""],
+        ["","=IF(COUNT(B3,'历史财务数据'!D3,B10)=3,(B3-'历史财务数据'!D3)*B10,\"-\")","=IF(COUNT(C3,B3,C10)=3,(C3-B3)*C10,\"-\")","=IF(COUNT(D3,C3,D10)=3,(D3-C3)*D10,\"-\")","=IF(COUNT(E3,D3,E10)=3,(E3-D3)*E10,\"-\")","","","","=B37","",""],
+        ["","=IF(COUNT(B15:B18)=4,B15+B16-B17-B18,\"-\")","=IF(COUNT(C15:C18)=4,C15+C16-C17-C18,\"-\")","=IF(COUNT(D15:D18)=4,D15+D16-D17-D18,\"-\")","=IF(COUNT(E15:E18)=4,E15+E16-E17-E18,\"-\")","","","","=IF(AND(COUNT(I17:I18)=2,I17>0,I18>=0),I17/(I17+I18),\"-\")","",""],
+        ["","","","","","","","","=IF(COUNT(I19)=1,1-I19,\"-\")","",""],
+        ["","=MAX(0,MIN(1,(B20-MAX($F$29,DATE(2025,12,31)))/(B20-DATE(2025,12,31))))","=MAX(0,MIN(1,(C20-MAX($F$29,B20))/(C20-B20)))","=MAX(0,MIN(1,(D20-MAX($F$29,C20))/(D20-C20)))","","","","","","",""],
+        ["","=MAX(0,(B20-$F$29)/365.25)","=MAX(0,(C20-$F$29)/365.25)","=MAX(0,(D20-$F$29)/365.25)","","","","","=IF(AND(COUNT(I7,I13:I14,I19:I20)=5,I14>=0,I14\u003c=1),I7*I19+I13*(1-I14)*I20,\"-\")","",""],
+        ["","=IF(AND(COUNT($F$27)=1,$F$27>-1),1/(1+$F$27)^B22,\"-\")","=IF(AND(COUNT($F$27)=1,$F$27>-1),1/(1+$F$27)^C22,\"-\")","=IF(AND(COUNT($F$27)=1,$F$27>-1),1/(1+$F$27)^D22,\"-\")","","","","","","",""],
+        ["","=IF(COUNT(B19,B21,B23)=3,B19*B21*B23,\"-\")","=IF(COUNT(C19,C21,C23)=3,C19*C21*C23,\"-\")","=IF(COUNT(D19,D21,D23)=3,D19*D21*D23,\"-\")","","","","","","",""],
+        ["","","","","","","","","='历史财务数据'!B35","",""],
+        ["","","","","","","","","=B42","",""],
+        ["","=IF(COUNT(B24:D24)=3,SUM(B24:D24),\"-\")","","","","=I22","","","","",""],
+        ["","=E19","","","","","","","","",""],
+        ["","=IF(AND(COUNT($F$27,$F$28,$B$28)=3,$F$27>$F$28,$F$28>-1),$B$28/($F$27-$F$28),\"-\")","","","","","","","","",""],
+        ["","=IF(COUNT($B$29,D23)=2,$B$29*D23,\"-\")","","","","","","","","",""],
+        ["","=IF(COUNT($B$27,$B$30)=2,$B$27+$B$30,\"-\")","","","","","","","","",""],
+        ["","=IF(AND(COUNT($B$30,$B$31)=2,$B$31\u003c>0),$B$30/$B$31,\"-\")","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","=IF(AND(COUNT($B$33:$B$39)=7,MIN($B$33:$B$39)>=0,$B$33>=$B$34+$B$35),$B$33-$B$34-$B$35+$B$36-$B$37-$B$38-$B$39,\"-\")","","","","","","","","",""],
+        ["","=IF(COUNT($B$31,$B$40)=2,$B$31+$B$40,\"-\")","","","","","","","","",""],
+        ["","='历史财务数据'!B36*I28","","","","","","","","",""],
+        ["","=I27*I28","","","","","","","","",""],
+        ["","='历史财务数据'!B35","","","","","","","","",""],
+        ["","=IF(AND(COUNT($B$41,$B$42,$B$43)=3,$B$42>0,$B$43>0),$B$41*100/$B$42*$B$43,\"-\")","","","","","","","","",""],
+        ["","=IF(AND(COUNT($B$45,$B$44)=2,$B$44>0),$B$45/$B$44-1,\"-\")","","","","","","","","",""],
+        ["","=IF(COUNT($B$45)=1,\"采用估计\",\"关键输入未确认\")","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","=IF(AND(COUNT($F$28,$F$32)=2,$F$32>0),$F$28+(-2)*$F$32,\"-\")","=IF(AND(COUNT($F$28,$F$32)=2,$F$32>0),$F$28+(-1)*$F$32,\"-\")","=IF(AND(COUNT($F$28,$F$32)=2,$F$32>0),$F$28+(0)*$F$32,\"-\")","=IF(AND(COUNT($F$28,$F$32)=2,$F$32>0),$F$28+(1)*$F$32,\"-\")","=IF(AND(COUNT($F$28,$F$32)=2,$F$32>0),$F$28+(2)*$F$32,\"-\")","","","","",""],
+        ["=IF(AND(COUNT($F$27,$F$31)=2,$F$31>0),$F$27+(-2)*$F$31,\"-\")","=IF(AND(COUNT($A51,B$50,$B$40,$B$42,$B$43,B$61)=6,COUNT(B$19:D$19)=3,$A51>B$50,$A51>-1,B$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A51)^B$22,C$19*C$21/(1+$A51)^C$22,D$19*D$21/(1+$A51)^D$22)+B$61/($A51-B$50)/(1+$A51)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A51,C$50,$B$40,$B$42,$B$43,C$61)=6,COUNT(B$19:D$19)=3,$A51>C$50,$A51>-1,C$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A51)^B$22,C$19*C$21/(1+$A51)^C$22,D$19*D$21/(1+$A51)^D$22)+C$61/($A51-C$50)/(1+$A51)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A51,D$50,$B$40,$B$42,$B$43,D$61)=6,COUNT(B$19:D$19)=3,$A51>D$50,$A51>-1,D$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A51)^B$22,C$19*C$21/(1+$A51)^C$22,D$19*D$21/(1+$A51)^D$22)+D$61/($A51-D$50)/(1+$A51)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A51,E$50,$B$40,$B$42,$B$43,E$61)=6,COUNT(B$19:D$19)=3,$A51>E$50,$A51>-1,E$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A51)^B$22,C$19*C$21/(1+$A51)^C$22,D$19*D$21/(1+$A51)^D$22)+E$61/($A51-E$50)/(1+$A51)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A51,F$50,$B$40,$B$42,$B$43,F$61)=6,COUNT(B$19:D$19)=3,$A51>F$50,$A51>-1,F$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A51)^B$22,C$19*C$21/(1+$A51)^C$22,D$19*D$21/(1+$A51)^D$22)+F$61/($A51-F$50)/(1+$A51)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","","","","",""],
+        ["=IF(AND(COUNT($F$27,$F$31)=2,$F$31>0),$F$27+(-1)*$F$31,\"-\")","=IF(AND(COUNT($A52,B$50,$B$40,$B$42,$B$43,B$61)=6,COUNT(B$19:D$19)=3,$A52>B$50,$A52>-1,B$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A52)^B$22,C$19*C$21/(1+$A52)^C$22,D$19*D$21/(1+$A52)^D$22)+B$61/($A52-B$50)/(1+$A52)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A52,C$50,$B$40,$B$42,$B$43,C$61)=6,COUNT(B$19:D$19)=3,$A52>C$50,$A52>-1,C$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A52)^B$22,C$19*C$21/(1+$A52)^C$22,D$19*D$21/(1+$A52)^D$22)+C$61/($A52-C$50)/(1+$A52)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A52,D$50,$B$40,$B$42,$B$43,D$61)=6,COUNT(B$19:D$19)=3,$A52>D$50,$A52>-1,D$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A52)^B$22,C$19*C$21/(1+$A52)^C$22,D$19*D$21/(1+$A52)^D$22)+D$61/($A52-D$50)/(1+$A52)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A52,E$50,$B$40,$B$42,$B$43,E$61)=6,COUNT(B$19:D$19)=3,$A52>E$50,$A52>-1,E$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A52)^B$22,C$19*C$21/(1+$A52)^C$22,D$19*D$21/(1+$A52)^D$22)+E$61/($A52-E$50)/(1+$A52)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A52,F$50,$B$40,$B$42,$B$43,F$61)=6,COUNT(B$19:D$19)=3,$A52>F$50,$A52>-1,F$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A52)^B$22,C$19*C$21/(1+$A52)^C$22,D$19*D$21/(1+$A52)^D$22)+F$61/($A52-F$50)/(1+$A52)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","","","","",""],
+        ["=IF(AND(COUNT($F$27,$F$31)=2,$F$31>0),$F$27+(0)*$F$31,\"-\")","=IF(AND(COUNT($A53,B$50,$B$40,$B$42,$B$43,B$61)=6,COUNT(B$19:D$19)=3,$A53>B$50,$A53>-1,B$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A53)^B$22,C$19*C$21/(1+$A53)^C$22,D$19*D$21/(1+$A53)^D$22)+B$61/($A53-B$50)/(1+$A53)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A53,C$50,$B$40,$B$42,$B$43,C$61)=6,COUNT(B$19:D$19)=3,$A53>C$50,$A53>-1,C$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A53)^B$22,C$19*C$21/(1+$A53)^C$22,D$19*D$21/(1+$A53)^D$22)+C$61/($A53-C$50)/(1+$A53)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A53,D$50,$B$40,$B$42,$B$43,D$61)=6,COUNT(B$19:D$19)=3,$A53>D$50,$A53>-1,D$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A53)^B$22,C$19*C$21/(1+$A53)^C$22,D$19*D$21/(1+$A53)^D$22)+D$61/($A53-D$50)/(1+$A53)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A53,E$50,$B$40,$B$42,$B$43,E$61)=6,COUNT(B$19:D$19)=3,$A53>E$50,$A53>-1,E$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A53)^B$22,C$19*C$21/(1+$A53)^C$22,D$19*D$21/(1+$A53)^D$22)+E$61/($A53-E$50)/(1+$A53)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A53,F$50,$B$40,$B$42,$B$43,F$61)=6,COUNT(B$19:D$19)=3,$A53>F$50,$A53>-1,F$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A53)^B$22,C$19*C$21/(1+$A53)^C$22,D$19*D$21/(1+$A53)^D$22)+F$61/($A53-F$50)/(1+$A53)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","","","","",""],
+        ["=IF(AND(COUNT($F$27,$F$31)=2,$F$31>0),$F$27+(1)*$F$31,\"-\")","=IF(AND(COUNT($A54,B$50,$B$40,$B$42,$B$43,B$61)=6,COUNT(B$19:D$19)=3,$A54>B$50,$A54>-1,B$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A54)^B$22,C$19*C$21/(1+$A54)^C$22,D$19*D$21/(1+$A54)^D$22)+B$61/($A54-B$50)/(1+$A54)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A54,C$50,$B$40,$B$42,$B$43,C$61)=6,COUNT(B$19:D$19)=3,$A54>C$50,$A54>-1,C$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A54)^B$22,C$19*C$21/(1+$A54)^C$22,D$19*D$21/(1+$A54)^D$22)+C$61/($A54-C$50)/(1+$A54)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A54,D$50,$B$40,$B$42,$B$43,D$61)=6,COUNT(B$19:D$19)=3,$A54>D$50,$A54>-1,D$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A54)^B$22,C$19*C$21/(1+$A54)^C$22,D$19*D$21/(1+$A54)^D$22)+D$61/($A54-D$50)/(1+$A54)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A54,E$50,$B$40,$B$42,$B$43,E$61)=6,COUNT(B$19:D$19)=3,$A54>E$50,$A54>-1,E$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A54)^B$22,C$19*C$21/(1+$A54)^C$22,D$19*D$21/(1+$A54)^D$22)+E$61/($A54-E$50)/(1+$A54)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A54,F$50,$B$40,$B$42,$B$43,F$61)=6,COUNT(B$19:D$19)=3,$A54>F$50,$A54>-1,F$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A54)^B$22,C$19*C$21/(1+$A54)^C$22,D$19*D$21/(1+$A54)^D$22)+F$61/($A54-F$50)/(1+$A54)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","","","","",""],
+        ["=IF(AND(COUNT($F$27,$F$31)=2,$F$31>0),$F$27+(2)*$F$31,\"-\")","=IF(AND(COUNT($A55,B$50,$B$40,$B$42,$B$43,B$61)=6,COUNT(B$19:D$19)=3,$A55>B$50,$A55>-1,B$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A55)^B$22,C$19*C$21/(1+$A55)^C$22,D$19*D$21/(1+$A55)^D$22)+B$61/($A55-B$50)/(1+$A55)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A55,C$50,$B$40,$B$42,$B$43,C$61)=6,COUNT(B$19:D$19)=3,$A55>C$50,$A55>-1,C$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A55)^B$22,C$19*C$21/(1+$A55)^C$22,D$19*D$21/(1+$A55)^D$22)+C$61/($A55-C$50)/(1+$A55)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A55,D$50,$B$40,$B$42,$B$43,D$61)=6,COUNT(B$19:D$19)=3,$A55>D$50,$A55>-1,D$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A55)^B$22,C$19*C$21/(1+$A55)^C$22,D$19*D$21/(1+$A55)^D$22)+D$61/($A55-D$50)/(1+$A55)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A55,E$50,$B$40,$B$42,$B$43,E$61)=6,COUNT(B$19:D$19)=3,$A55>E$50,$A55>-1,E$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A55)^B$22,C$19*C$21/(1+$A55)^C$22,D$19*D$21/(1+$A55)^D$22)+E$61/($A55-E$50)/(1+$A55)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","=IF(AND(COUNT($A55,F$50,$B$40,$B$42,$B$43,F$61)=6,COUNT(B$19:D$19)=3,$A55>F$50,$A55>-1,F$50>-1,$B$42>0),(SUM(B$19*B$21/(1+$A55)^B$22,C$19*C$21/(1+$A55)^C$22,D$19*D$21/(1+$A55)^D$22)+F$61/($A55-F$50)/(1+$A55)^D$22+$B$40)*100/$B$42*$B$43,\"-\")","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","=B50","=C50","=D50","=E50","=F50","","","","",""],
+        ["","=IF(COUNT(D$3,B50)=2,D$3*(1+B50),\"-\")","=IF(COUNT(D$3,C50)=2,D$3*(1+C50),\"-\")","=IF(COUNT(D$3,D50)=2,D$3*(1+D50),\"-\")","=IF(COUNT(D$3,E50)=2,D$3*(1+E50),\"-\")","=IF(COUNT(D$3,F50)=2,D$3*(1+F50),\"-\")","","","","",""],
+        ["","=IF(AND(COUNT(B58,$F$30,E$7)=3,E$7>=0,E$7\u003c=1),B58*$F$30-MAX(B58*$F$30,0)*E$7,\"-\")","=IF(AND(COUNT(C58,$F$30,E$7)=3,E$7>=0,E$7\u003c=1),C58*$F$30-MAX(C58*$F$30,0)*E$7,\"-\")","=IF(AND(COUNT(D58,$F$30,E$7)=3,E$7>=0,E$7\u003c=1),D58*$F$30-MAX(D58*$F$30,0)*E$7,\"-\")","=IF(AND(COUNT(E58,$F$30,E$7)=3,E$7>=0,E$7\u003c=1),E58*$F$30-MAX(E58*$F$30,0)*E$7,\"-\")","=IF(AND(COUNT(F58,$F$30,E$7)=3,E$7>=0,E$7\u003c=1),F58*$F$30-MAX(F58*$F$30,0)*E$7,\"-\")","","","","",""],
+        ["","=IF(AND(COUNT(B58,E$9,E$8,D$3,E$10)=5,E$9>=0,E$8>=0),B58*(E$9-E$8)+(B58-D$3)*E$10,\"-\")","=IF(AND(COUNT(C58,E$9,E$8,D$3,E$10)=5,E$9>=0,E$8>=0),C58*(E$9-E$8)+(C58-D$3)*E$10,\"-\")","=IF(AND(COUNT(D58,E$9,E$8,D$3,E$10)=5,E$9>=0,E$8>=0),D58*(E$9-E$8)+(D58-D$3)*E$10,\"-\")","=IF(AND(COUNT(E58,E$9,E$8,D$3,E$10)=5,E$9>=0,E$8>=0),E58*(E$9-E$8)+(E58-D$3)*E$10,\"-\")","=IF(AND(COUNT(F58,E$9,E$8,D$3,E$10)=5,E$9>=0,E$8>=0),F58*(E$9-E$8)+(F58-D$3)*E$10,\"-\")","","","","",""],
+        ["","=IF(COUNT(B59:B60)=2,B59-B60,\"-\")","=IF(COUNT(C59:C60)=2,C59-C60,\"-\")","=IF(COUNT(D59:D60)=2,D59-D60,\"-\")","=IF(COUNT(E59:E60)=2,E59-E60,\"-\")","=IF(COUNT(F59:F60)=2,F59-F60,\"-\")","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""],
+        ["","","","","","","","","","",""]
+      ]
+    },
+    {
+      "name": "历史财务数据",
+      "widths": [246,104,104,104,28,246,104,104,104],
+      "merges": ["A1:I1","A34:D34"],
+      "heights": {"1":43,"2":29,"3":25,"4":25,"5":25,"6":25,"7":25,"8":25,"9":25,"10":25,"11":25,"12":25,"13":25,"14":25,"15":25,"16":25,"17":25,"18":25,"19":25,"20":25,"21":25,"22":25,"23":25,"24":25,"25":25,"26":29,"27":25,"28":25,"29":25,"30":25,"31":25,"32":25,"33":25,"34":29,"35":25,"36":25,"37":25,"38":25,"39":25,"40":25,"41":25,"42":25},
+      "styleIds": {"A1":1,"B1":2,"C1":2,"D1":2,"E1":2,"F1":2,"G1":2,"H1":2,"I1":2,"A2":8,"B2":27,"C2":27,"D2":27,"E2":5,"F2":8,"G2":27,"H2":27,"I2":27,"A3":42,"B3":49,"C3":49,"D3":49,"E3":5,"F3":37,"G3":38,"H3":38,"I3":38,"A4":37,"B4":38,"C4":38,"D4":38,"E4":5,"F4":37,"G4":38,"H4":38,"I4":38,"A5":42,"B5":49,"C5":49,"D5":49,"E5":5,"F5":37,"G5":38,"H5":38,"I5":38,"A6":37,"B6":38,"C6":38,"D6":38,"E6":5,"F6":37,"G6":38,"H6":38,"I6":38,"A7":37,"B7":38,"C7":38,"D7":38,"E7":5,"F7":42,"G7":49,"H7":49,"I7":49,"A8":37,"B8":38,"C8":38,"D8":38,"E8":5,"F8":37,"G8":38,"H8":38,"I8":38,"A9":37,"B9":38,"C9":38,"D9":38,"E9":5,"F9":37,"G9":38,"H9":38,"I9":38,"A10":37,"B10":38,"C10":38,"D10":38,"E10":5,"F10":37,"G10":38,"H10":38,"I10":38,"A11":37,"B11":38,"C11":38,"D11":38,"E11":5,"F11":37,"G11":38,"H11":38,"I11":38,"A12":37,"B12":38,"C12":38,"D12":38,"E12":5,"F12":42,"G12":49,"H12":49,"I12":49,"A13":37,"B13":38,"C13":38,"D13":38,"E13":5,"F13":40,"G13":41,"H13":41,"I13":41,"A14":42,"B14":49,"C14":49,"D14":49,"E14":5,"F14":37,"G14":38,"H14":38,"I14":38,"A15":37,"B15":38,"C15":38,"D15":38,"E15":5,"F15":37,"G15":38,"H15":38,"I15":38,"A16":37,"B16":38,"C16":38,"D16":38,"E16":5,"F16":42,"G16":49,"H16":49,"I16":49,"A17":42,"B17":49,"C17":49,"D17":49,"E17":5,"F17":37,"G17":38,"H17":38,"I17":38,"A18":37,"B18":38,"C18":38,"D18":38,"E18":5,"F18":42,"G18":49,"H18":49,"I18":49,"A19":47,"B19":48,"C19":48,"D19":48,"E19":5,"F19":40,"G19":41,"H19":41,"I19":41,"A20":47,"B20":48,"C20":48,"D20":48,"E20":5,"F20":42,"G20":49,"H20":49,"I20":49,"A21":37,"B21":38,"C21":38,"D21":38,"E21":5,"F21":37,"G21":38,"H21":38,"I21":38,"A22":42,"B22":49,"C22":49,"D22":49,"E22":5,"F22":42,"G22":49,"H22":49,"I22":49,"A23":37,"B23":72,"C23":72,"D23":72,"E23":5,"F23":40,"G23":41,"H23":41,"I23":41,"A24":37,"B24":38,"C24":38,"D24":38,"E24":5,"F24":37,"G24":38,"H24":38,"I24":38,"A25":5,"B25":5,"C25":5,"D25":5,"E25":5,"F25":5,"G25":5,"H25":5,"I25":5,"A26":8,"B26":27,"C26":27,"D26":27,"E26":5,"F26":8,"G26":27,"H26":27,"I26":27,"A27":37,"B27":5,"C27":44,"D27":44,"E27":5,"F27":37,"G27":38,"H27":38,"I27":38,"A28":37,"B28":44,"C28":44,"D28":44,"E28":5,"F28":37,"G28":44,"H28":44,"I28":44,"A29":37,"B29":44,"C29":44,"D29":44,"E29":5,"F29":37,"G29":38,"H29":38,"I29":38,"A30":37,"B30":44,"C30":44,"D30":44,"E30":5,"F30":37,"G30":44,"H30":44,"I30":44,"A31":37,"B31":44,"C31":44,"D31":44,"E31":5,"F31":5,"G31":5,"H31":5,"I31":5,"A32":37,"B32":44,"C32":44,"D32":44,"E32":5,"F32":5,"G32":5,"H32":5,"I32":5,"A33":5,"B33":5,"C33":5,"D33":5,"E33":5,"F33":5,"G33":5,"H33":5,"I33":5,"A34":8,"B34":9,"C34":9,"D34":9,"E34":5,"F34":5,"G34":5,"H34":5,"I34":5,"A35":37,"B35":72,"C35":5,"D35":5,"E35":5,"F35":5,"G35":5,"H35":5,"I35":5,"A36":37,"B36":38,"C36":5,"D36":5,"E36":5,"F36":5,"G36":5,"H36":5,"I36":5,"A37":37,"B37":38,"C37":5,"D37":5,"E37":5,"F37":5,"G37":5,"H37":5,"I37":5,"A38":37,"B38":38,"C38":5,"D38":5,"E38":5,"F38":5,"G38":5,"H38":5,"I38":5,"A39":37,"B39":38,"C39":5,"D39":5,"E39":5,"F39":5,"G39":5,"H39":5,"I39":5,"A40":37,"B40":54,"C40":5,"D40":5,"E40":5,"F40":5,"G40":5,"H40":5,"I40":5,"A41":37,"B41":54,"C41":5,"D41":5,"E41":5,"F41":5,"G41":5,"H41":5,"I41":5,"A42":37,"B42":39,"C42":5,"D42":5,"E42":5,"F42":5,"G42":5,"H42":5,"I42":5},
+      "values": [
+        ["瑞芯微-财务报表","","","","","","","",""],
+        ["利润表（亿元）","2023A","2024A","2025A","","资产负债表（亿元）","2023A","2024A","2025A"],
+        ["营业收入","21.35","31.36","44.02","","货币资金","10.13","20.72","13.00"],
+        ["营业成本","14.04","19.57","25.55","","应收票据及应收账款","2.94","2.87","4.68"],
+        ["毛利","7.31","11.79","18.47","","预付款项","0.21","0.28","0.11"],
+        ["税金及附加","0.06","0.12","0.31","","存货","12.51","7.84","12.54"],
+        ["销售费用","0.45","0.64","0.82","","流动资产合计","28.53","36.19","48.26"],
+        ["管理费用","0.99","1.02","1.12","","长期股权投资","0.00","0.00","0.00"],
+        ["研发费用","5.36","5.64","6.84","","投资性房地产","0.00","0.00","0.00"],
+        ["财务费用","-0.22","-0.61","-0.50","","固定资产","0.40","0.37","0.53"],
+        ["其他收入","0.35","0.93","1.22","","无形资产","1.28","0.92","1.90"],
+        ["投资收益","0.05","0.05","0.12","","非流动资产合计","6.54","6.47","7.59"],
+        ["资产减值及公允价值变动","-0.24","0.16","-0.03","","资产总计","35.07","42.66","55.85"],
+        ["营业利润","0.83","6.11","11.17","","短期借款","0.00","0.00","0.00"],
+        ["营业外收入","0.01","0.01","0.03","","应付票据及应付账款","3.09","3.62","6.90"],
+        ["营业外支出","0.01","0.01","0.02","","流动负债合计","4.21","6.64","11.51"],
+        ["税前利润","0.82","6.12","11.18","","长期借款","0.00","0.00","0.00"],
+        ["所得税费用","-0.53","0.17","0.78","","非流动负债合计","0.26","0.56","0.52"],
+        ["净利润","1.35","5.95","10.40","","总负债","4.46","7.20","12.02"],
+        ["归母净利润","1.35","5.95","10.40","","归母股东权益","30.61","35.46","43.82"],
+        ["少数股东损益","0.00","0.00","0.00","","少数股东权益","0.00","0.00","0.00"],
+        ["息税前利润","0.61","5.66","10.65","","股东权益合计","30.61","35.46","43.82"],
+        ["EPS（元）","0.32","1.42","2.48","","负债和股东权益总计","35.07","42.66","55.85"],
+        ["历史加权平均股本（百万股）","421.53","418.92","419.33","","营运资本","24.33","29.55","36.75"],
+        ["","","","","","","","",""],
+        ["历史指标","2023A","2024A","2025A","","现金流历史校准（亿元）","2023A","2024A","2025A"],
+        ["营业收入增速","","46.94%","40.36%","","D&A","1.93","1.41","1.58"],
+        ["毛利率","34.25%","37.59%","41.95%","","D&A收入占比","9.05%","4.48%","3.59%"],
+        ["销售费用率","2.11%","2.04%","1.87%","","Capex","1.62","1.25","2.33"],
+        ["管理费用率","4.65%","3.24%","2.55%","","Capex收入占比","7.59%","3.98%","5.29%"],
+        ["研发费用率","25.11%","17.99%","15.53%","","","","",""],
+        ["有效税率","-64.06%","2.78%","6.96%","","","","",""],
+        ["","","","","","","","",""],
+        ["市场快照","","","","","","","",""],
+        ["当前股价（元）","213.59","","","","","","",""],
+        ["当前总股本（百万股）","423.40","","","","","","",""],
+        ["流通股本（百万股）","423.35","","","","","","",""],
+        ["总市值（亿）","904.33","","","","","","",""],
+        ["流通市值（亿）","904.23","","","","","","",""],
+        ["PE_TTM","56.78x","","","","","","",""],
+        ["PB","16.54x","","","","","","",""],
+        ["快照日期","2026-11-09","","","","","","",""]
+      ],
+      "formulas": [
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","=B3-B4","=C3-C4","=D3-D4","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","=B20*100/B23","=C20*100/C23","=D20*100/D23","","","=G7-G16","=H7-H16","=I7-I16"],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","=C3/B3-1","=D3/C3-1","","","","",""],
+        ["","=B5/B3","=C5/C3","=D5/D3","","","=IF(AND(ISNUMBER(G27),ISNUMBER(B3),B3\u003c>0),G27/B3,\"-\")","=IF(AND(ISNUMBER(H27),ISNUMBER(C3),C3\u003c>0),H27/C3,\"-\")","=IF(AND(ISNUMBER(I27),ISNUMBER(D3),D3\u003c>0),I27/D3,\"-\")"],
+        ["","=B7/B3","=C7/C3","=D7/D3","","","","",""],
+        ["","=B8/B3","=C8/C3","=D8/D3","","","=IF(AND(ISNUMBER(G29),ISNUMBER(B3),B3\u003c>0),G29/B3,\"-\")","=IF(AND(ISNUMBER(H29),ISNUMBER(C3),C3\u003c>0),H29/C3,\"-\")","=IF(AND(ISNUMBER(I29),ISNUMBER(D3),D3\u003c>0),I29/D3,\"-\")"],
+        ["","=B9/B3","=C9/C3","=D9/D3","","","","",""],
+        ["","=B18/B17","=C18/C17","=D18/D17","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","=B35*B36/100","","","","","","",""],
+        ["","=B35*B37/100","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""],
+        ["","","","","","","","",""]
+      ]
+    }
+  ]
+}
+</script>
+
+<script>
+const watchlist = [
+  ["瑞芯微", "603893.SH", "212.00", "-0.32%"],
+  ["中国平安", "PNGAY.US", "--", "0%", "--", "--"],
+  ["平安银行", "000001.SZ", "11.89", "+0.68%"],
+  ["中国平安", "02318.HK", "53.05", "-0.19%"],
+  ["中国平安", "601318.SH", "54.60", "+0.18%"],
+  ["招商银行", "CIHHF.US", "--", "0%", "--", "--"],
+  ["招商银行", "03968.HK", "54.50", "+0.65%"],
+  ["招商银行", "600036.SH", "43.01", "+0.30%"],
+  ["五粮液", "000858.SZ", "74.74", "-0.80%"],
+  ["贵州茅台", "600519.SH", "1444.99", "-0.55%"],
+  ["中文在线", "300364.SZ", "26.88", "+2.60%"],
+  ["索辰科技", "688507.SH", "184.40", "+1.88%"],
+  ["美光科技", "MU.US", "690.00", "+5.12%", "705.90", "+7.54%"],
+  ["海康威视", "002415.SZ", "34.67", "-1.65%"],
+  ["歌尔股份", "002241.SZ", "24.74", "+0.53%"],
+  ["牧原股份", "002714.SZ", "44.55", "+0.34%"],
+  ["苹果", "AAPL.US", "342.37", "-0.52%", "339.21", "-1.44%"],
+  ["太辰光", "300570.SZ", "102.15", "+0.50%"],
+  ["中微公司", "688012.SH", "248.00", "-2.36%"],
+  ["招商轮船", "601872.SH", "16.56", "+2.41%"],
+  ["风华高科", "000636.SZ", "31.78", "+0.92%"],
+  ["中国巨石", "600176.SH", "28.04", "+2.15%"],
+  ["谷歌A", "GOOGL.US", "284.78", "+0.78%", "284.99", "+0.86%"],
+  ["谷歌C", "GOOG.US", "283.93", "+0.78%", "283.62", "+0.67%"],
+  ["英特尔", "INTC.US", "56.28", "+7.71%", "54.99", "+5.24%"],
+  ["同花顺", "300033.SZ", "203.51", "+0.40%"],
+  ["首华燃气", "300483.SZ", "19.36", "+0.62%"],
+  ["英伟达", "NVDA.US", "186.64", "+2.78%", "191.24", "+5.31%"],
+  ["湖南黄金", "002155.SZ", "20.22", "+0.45%"],
+  ["生益科技", "600183.SH", "70.68", "+0.27%"],
+  ["天孚通信", "300394.SZ", "122.82", "+0.67%"],
+  ["江海股份", "002484.SZ", "32.60", "+0.52%"],
+  ["工业富联", "601138.SH", "42.57", "+4.57%"],
+  ["工商银行", "601398.SH", "8.61", "+2.01%"],
+  ["紫金矿业", "601899.SH", "28.41", "+0.46%"],
+  ["芯碁微装", "688630.SH", "220.41", "-3.24%"]
+];
+
+function changeClass(change) {
+  if (change.startsWith("+")) return "up";
+  if (change.startsWith("-") && change !== "--") return "down";
+  return "empty";
+}
+
+document.querySelector("#watch-rows").innerHTML = watchlist.map(([name, code, price, change, prePrice, preChange], i) => {
+  const color = changeClass(change);
+  const extraPrice = prePrice ? `<div class="subpx">${prePrice}</div>` : "";
+  const extraChange = preChange ? `<div class="subpx">${preChange}　盘前</div>` : "";
+  return `<div class="wrow${i === 0 ? " on" : ""}">
+    <div><div class="wname">${name}</div><div class="wcode">${code}</div></div>
+    <div class="px ${color}">${price}${extraPrice}</div>
+    <div class="pct ${color}">${change}${extraChange}</div>
+  </div>`;
+}).join("");
+
+const events = [
+  {
+    title: "瑞芯微Q4业绩改善预期与新品放量驱动",
+    date: "今天 08:00",
+    sectors: ["电子"],
+    rating: "盈利表现与业绩预期",
+    summary: "瑞芯微Q3营收受PCB交付扰动短期承压，但Q4将受益于订单回滚及RK3572、RK182等新品放量，叠加汽车与工业视觉高增长、成本传导顺畅，收入利润质量向好。",
+    stocks: [["瑞芯微", ".SH", "-0.32%"]],
+    sources: [["11-09", "国泰海通电子 | 每日晨会1109"]],
+    count: 1
+  },
+  {
+    title: "AI硬件产业化加速驱动半导体与机器人供应链升级",
+    date: "今天 07:45",
+    sectors: ["机械设备", "电子"],
+    rating: "需求及景气度变化",
+    summary: "OpenAI、英伟达等大厂推进AI端侧硬件及人形机器人量产，带动半导体设备、fab厂、AI芯片、机器人核心零部件及结构件等环节订单上修、验证放量和景气度提升，形成跨产业链的硬科技投资主线。",
+    stocks: [["瑞芯微", ".SH", "-0.32%"], ["北方华创", ".SZ", "-2.71%"], ["杰克科技", ".SH", "+4.60%"], ["立讯精密", ".SZ", "+1.46%"]],
+    more: "+17",
+    sources: [["11-09", "国金证券 | 产业景气高频跟踪 - 第七十五期"], ["11-09", "长江机械 | 周机汇 - 一周观点：模型迭代，物理AI近期发生了哪些变化？"]],
+    count: 2
+  },
+  {
+    title: "端侧AI硬件密集落地驱动产业链景气上行",
+    date: "2026-11-08",
+    sectors: ["电子", "通信"],
+    rating: "需求及景气度变化",
+    summary: "2026年底至2027年，OpenAI、苹果、Meta等巨头端侧AI硬件集中发布，带动SOC芯片迭代、光学声学结构件及模组需求提升，国产供应链在HBM供给改善与制程升级支撑下进入业绩兑现期。",
+    stocks: [["瑞芯微", ".SH", "-0.32%"], ["移远通信", ".SH", "--"]],
+    more: "+34",
+    sources: [["11-08", "长江通信 | 物理AI大时代，从模组迈向完整AI解决方案"], ["11-08", "华泰电子 | 端侧AI产品发布节奏及投资机会"]],
+    count: 8
+  },
+  {
+    title: "端侧AI产业化加速与算力基建升级",
+    date: "2026-11-04",
+    sectors: ["电力设备", "电子"],
+    grade: "B",
+    rating: "技术迭代与项目推进",
+    summary: "国产AI算力集群规模化落地、端侧SoC芯片放量在即、硬件厂商盈利改善，叠加存储价格见顶回落，共同推动端侧AI从技术验证迈向商业化。",
+    stocks: [["瑞芯微", ".SH", "-0.32%"], ["炬芯科技", ".SH", "--"], ["豪鹏科技", ".SZ", "--"], ["北方华创", ".SZ", "-2.71%"]],
+    more: "+6",
+    sources: [["11-04", "国联民生电子 |【电子新旗手】否极泰来，从产业看科技反攻"], ["11-04", "华创电子 | 黎明将至，2026年电子收官策略"]],
+    count: 4
+  }
+];
+
+document.querySelector("#events").innerHTML = events.map(event => {
+  const sectors = event.sectors.map(sector => `<span class="sector"><span class="positive">利多</span>${sector}</span>`).join("");
+  const stocks = event.stocks.map(([name, exchange, change]) =>
+    `<span class="stock-tag"><span class="positive">利多</span>${name}<span class="exchange">${exchange}</span> <span class="${changeClass(change)}">${change}</span></span>`
+  ).join("");
+  const sources = event.sources.map(([date, title]) =>
+    `<div class="source-row"><time>${date}</time><span>纪要</span><span>${title}</span></div>`
+  ).join("");
+  return `<article class="item">
+    <div class="item-h"><h3><i class="signal-icon" aria-hidden="true">⚑</i>${event.title}</h3><time>${event.date}</time></div>
+    <div class="badges">${sectors}<span class="rating"><span class="link">${event.grade ?? "A"}</span>　${event.rating} <span class="link">事件回测</span></span></div>
+    <div class="item-body"><p>${event.summary}</p><div class="related">相关股票：${stocks}${event.more ? `<span class="stock-tag">${event.more}</span>` : ""}</div></div>
+    <div class="sources"><div class="source-h"><span>事件溯源:</span><span>查看更多(${event.count}) ›</span></div>${sources}</div>
+  </article>`;
+}).join("");
+
+// Points are traced from the reference plot in CSS pixels.
+const trace = [
+  [416,506],[426,435],[436,477],[441,461],[450,498],[455,545],[465,502],[470,502],
+  [479,444],[484,447],[489,428],[498,462],[503,468],[508,462],[517,512],[522,528],
+  [527,550],[532,559],[538,535],[542,546],[548,535],[557,511],[566,532],[576,494],
+  [581,505],[586,474],[591,486],[596,505],[601,513],[610,517],[615,533],[620,535],
+  [625,560],[630,575],[635,561],[639,582],[645,562],[650,575],[658,554],[663,578],
+  [673,580],[687,586],[696,579],[701,577],[706,570],[712,574],[716,569],[723,578],
+  [731,571],[740,592],[750,594],[762,590],[770,608],[779,597],[785,603],[793,619],
+  [799,643],[805,649],[810,635],[815,641],[823,642],[837,651],[842,639],[852,638],
+  [857,625],[865,638],[872,631],[880,646],[886,659],[891,679],[896,667],[902,663],
+  [910,663],[917,667],[922,666],[930,676],[938,659],[944,657],[954,629],[964,621],
+  [969,627],[974,620],[979,629],[984,622],[989,637],[998,651],[1007,678],[1022,675],
+  [1032,677],[1040,682],[1047,689],[1056,705],[1062,690],[1070,683],[1077,669],[1086,663],
+  [1090,653],[1095,646],[1101,646],[1106,654],[1110,642],[1115,637],[1121,635],[1127,637],
+  [1134,627],[1139,628],[1143,624],[1148,626],[1153,596],[1158,603],[1163,620],[1168,602],
+  [1176,607],[1182,597],[1187,615],[1194,633],[1207,648],[1216,653],[1221,650],[1229,653],
+  [1235,652],[1241,650],[1246,658],[1259,663],[1264,653],[1271,648],[1277,654],[1283,644],
+  [1289,647],[1297,635],[1301,641],[1307,641],[1318,598],[1333,604],[1342,606],[1347,617],
+  [1353,611],[1362,625],[1368,616],[1375,616],[1381,623],[1391,621],[1400,626],[1405,618],
+  [1413,614],[1418,620],[1426,596],[1431,607],[1436,603],[1443,616],[1448,602],[1453,622],
+  [1459,614],[1469,609],[1476,610],[1483,603],[1491,614],[1496,603],[1503,598],[1512,600],
+  [1517,595],[1526,592],[1535,600],[1541,623],[1548,630],[1556,632],[1567,628],[1575,628],[1580,619]
+];
+
+function drawChart() {
+  const canvas = document.querySelector("#chart");
+  const { width, height } = canvas.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+
+  const left = 15;
+  const right = width - 16;
+  const plotWidth = right - left;
+  const x = position => left + plotWidth * (position - 416) / 1164;
+  const y = position => position - 395;
+  const bottom = height - 23;
+  const points = trace.map(([position, value]) => [x(position), y(value)]);
+  const drawLine = () => {
+    ctx.beginPath();
+    points.forEach(([px, py], i) => i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py));
+  };
+
+  const gradient = ctx.createLinearGradient(0, 30, 0, 323);
+  gradient.addColorStop(0, "#00947b37");
+  gradient.addColorStop(1, "#00947b00");
+  drawLine();
+  ctx.lineTo(right, 324);
+  ctx.lineTo(left, 324);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  ctx.strokeStyle = "#d1d5da";
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(left, 208);
+  ctx.lineTo(right, 208);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  drawLine();
+  ctx.strokeStyle = "#409f90";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  const prices = ["220.19", "217.22", "214.25", "211.27", "208.30"];
+  const returns = ["3.53%", "2.13%", "0.74%", "-0.66%", "-2.06%"];
+  ctx.font = '600 10px "PingFang SC", sans-serif';
+  ctx.fillStyle = "#b3b6bc";
+  prices.forEach((price, i) => {
+    const labelY = 36 + i * 69.5;
+    ctx.textAlign = "left";
+    ctx.fillText(price, left + 3, labelY);
+    ctx.textAlign = "right";
+    ctx.fillText(returns[i], right - 4, labelY);
+  });
+
+  // Fixed volumes match the visible opening spike and the intraday profile.
+  const opening = [38, 53, 44, 20, 24, 29, 11, 22, 15, 28, 25, 35, 18, 27, 31, 10, 14, 13, 16, 17, 11, 12, 16, 10, 7, 5];
+  const peaks = {35:13, 45:10, 63:10, 75:13, 81:10, 98:14, 100:18, 132:17, 166:12, 185:10, 205:11, 224:12, 232:20, 233:16, 240:10};
+  const bars = 241;
+  const slot = plotWidth / (bars - 1);
+  let segment = 1;
+  for (let i = 0; i < bars; i++) {
+    const position = 416 + 1164 * i / (bars - 1);
+    while (trace[segment][0] < position) segment++;
+    const rising = trace[segment][1] < trace[segment - 1][1];
+    const volume = opening[i] ?? peaks[i] ?? (2 + ((i * 19 + i * i * 17) % 13) / 2.4);
+    ctx.fillStyle = rising ? "#d9868d" : "#81b8ae";
+    ctx.fillRect(left + i * slot - slot * 0.29, bottom - volume, slot * 0.58, volume);
+  }
+
+  ctx.textAlign = "left";
+  ctx.font = '12px "PingFang SC", sans-serif';
+  ctx.fillStyle = "#454952";
+  ctx.fillText("成交量809.00手", left + 2, bottom - 49);
+  ctx.textAlign = "center";
+  ctx.font = '600 9px "PingFang SC", sans-serif';
+  ctx.fillStyle = "#757981";
+  ["11/9", "10:00", "10:30", "11:00", "11:30", "13:30", "14:00", "14:30", "15:00"].forEach((label, i) =>
+    ctx.fillText(label, left + plotWidth * i / 8, height - 8)
+  );
+}
+
+const main = document.querySelector(".main");
+const compact = document.querySelector(".compact");
+const quoteActions = document.querySelector(".q1 .quote-actions");
+const compactActions = compact.querySelector(".quote-actions");
+const quoteValuation = quoteActions.querySelector(".valuation-trigger");
+const valuationDialog = document.querySelector("#valuation-model");
+
+document.querySelectorAll(".valuation-trigger").forEach(button => {
+  button.addEventListener("click", () => valuationDialog.showModal());
+});
+
+const valuationData = JSON.parse(document.querySelector("#valuation-demo-workbook").textContent);
+const valuation = selector => valuationDialog.querySelector(selector);
+const valuationViews = [...valuationDialog.querySelectorAll("[data-val-view]")];
+const productButtons = [...valuationDialog.querySelectorAll("[data-val-product]")];
+const productPanels = [...valuationDialog.querySelectorAll("[data-val-panel]")];
+const expandButton = valuation("[data-val-expand]");
+const previousButton = valuation("[data-val-previous]");
+const taskButton = valuation("[data-val-task]");
+const restartButton = valuation('[data-val-view="result"] [data-val-start]');
+const cloudSaveButton = valuation("[data-val-cloud-save]");
+const sheetTabs = valuation("[data-val-sheets]");
+const workbookGrid = valuation("[data-val-grid]");
+
+const stageGroups = [
+  ["财报与行情", ["历史财务与行情快照"]],
+  ["主营拆分与历史回填", ["主营业务拆分", "历史分部收入回填"]],
+  ["分部研究、收入与成本预测", ["分部研究与收入预测", "运营成本预测"]],
+  ["相对估值预测", ["同业分析与相对估值"]],
+  ["DCF估值预测", ["DCF 与 WACC"]],
+  ["研究底稿撰写", ["生成研究底稿与总结"]],
+  ["生成 Excel", ["编译 Excel 工作簿"]]
+];
+const stageNames = stageGroups.flatMap(([, stages]) => stages);
+valuation("[data-val-meter]").max = stageNames.length;
+const stageList = valuation("[data-val-stages]");
+stageList.innerHTML = stageGroups.map(([group, stages]) => `
+  <li><details><summary>
+    <span class="valuation-stage-icon" aria-hidden="true"></span><span>${group}</span>
+    <span class="valuation-stage-status"></span><svg class="icon small" aria-hidden="true"><use href="#i-chevron"/></svg>
+  </summary><ul>${stages.map(stage => `<li>${stage} · <span></span></li>`).join("")}</ul></details></li>
+`).join("");
+const stageRows = [...stageList.children];
+const stageLabels = { done: "已完成", running: "进行中", pending: "待开始" };
+let completedStages = 0;
+let progressTimer = null;
+let resultVersion = 0;
+let openVersion = 0;
+const cloudSavedVersions = new Set();
+let currentSheet = 0;
+let currentCell = null;
+
+function showValuationView(view) {
+  valuationDialog.dataset.view = view;
+  valuationViews.forEach(panel => { panel.hidden = panel.dataset.valView !== view; });
+  expandButton.hidden = view !== "result";
+  if (view !== "result") setValuationExpanded(false);
+  if (valuationDialog.open && view === "progress") valuation("[data-val-stage]").focus({ preventScroll: true });
+}
+
+function setValuationExpanded(expanded) {
+  valuationDialog.dataset.expanded = String(expanded);
+  expandButton.setAttribute("aria-pressed", String(expanded));
+  expandButton.setAttribute("aria-label", expanded ? "还原窗口" : "最大化");
+}
+
+function refreshValuationProgress() {
+  valuation("[data-val-stage]").textContent = stageNames[completedStages] ?? "建模完成";
+  valuation("[data-val-progress-count]").textContent = `${completedStages} / ${stageNames.length} 阶段已完成`;
+  valuation("[data-val-meter]").value = completedStages;
+  let offset = 0;
+  stageRows.forEach((row, index) => {
+    const children = [...row.querySelectorAll("ul li span")];
+    const end = offset + children.length;
+    const status = completedStages >= end ? "done" : completedStages >= offset ? "running" : "pending";
+    row.dataset.status = status;
+    row.querySelector(".valuation-stage-icon").textContent = status === "done" ? "✓" : index + 1;
+    row.querySelector(".valuation-stage-status").textContent = stageLabels[status];
+    children.forEach((child, i) => {
+      const step = offset + i;
+      child.textContent = stageLabels[step < completedStages ? "done" : step === completedStages ? "running" : "pending"];
+    });
+    offset = end;
+  });
+}
+
+function updateValuationActions() {
+  const running = progressTimer !== null;
+  previousButton.hidden = resultVersion === 0;
+  taskButton.hidden = !running && openVersion === resultVersion;
+  taskButton.textContent = running ? "返回进度" : "查看本次 Excel";
+  restartButton.hidden = !taskButton.hidden;
+  valuation("[data-val-version]").textContent = `演示版本 ${openVersion}`;
+  const savedToCloud = cloudSavedVersions.has(openVersion);
+  cloudSaveButton.disabled = savedToCloud;
+  valuation("[data-val-cloud-label]").textContent = savedToCloud ? "已保存（演示）" : "保存到云文档";
+  valuation("[data-val-cloud-status]").textContent = savedToCloud ? "已演示将当前工作簿保存到云文档" : "";
+}
+
+function startValuationDemo() {
+  if (progressTimer !== null) return;
+  completedStages = 0;
+  stageRows.forEach(row => { row.querySelector("details").open = false; });
+  showValuationView("progress");
+  refreshValuationProgress();
+  progressTimer = setInterval(() => {
+    completedStages++;
+    refreshValuationProgress();
+    if (completedStages < stageNames.length) return;
+
+    clearInterval(progressTimer);
+    progressTimer = null;
+    resultVersion++;
+    if (valuationDialog.dataset.view === "progress") showValuationResult();
+    else updateValuationActions();
+  }, 800);
+  updateValuationActions();
+}
+
+function selectValuationProduct(product) {
+  productButtons.forEach(button => button.setAttribute("aria-pressed", String(button.dataset.valProduct === product)));
+  productPanels.forEach(panel => { panel.hidden = panel.dataset.valPanel !== product; });
+}
+
+function showValuationResult() {
+  openVersion = resultVersion;
+  showValuationView("result");
+  selectValuationProduct("workbook");
+  renderValuationSheet(0);
+  updateValuationActions();
+  if (valuationDialog.open) productButtons[0].focus({ preventScroll: true });
+}
+
+const columnLabel = column => String.fromCharCode(65 + column);
+const excelAddress = (row, column) => columnLabel(column) + (row + 1);
+
+function renderValuationSheet(index) {
+  const sheet = valuationData.sheets[index];
+  currentSheet = index;
+  currentCell = null;
+  const table = document.createElement("table");
+  table.setAttribute("aria-label", sheet.name + "工作表");
+  const columns = table.appendChild(document.createElement("colgroup"));
+  const widths = [42, ...sheet.widths];
+  table.style.minWidth = widths.reduce((sum, width) => sum + width, 0) + "px";
+  widths.forEach(width => { columns.appendChild(document.createElement("col")).style.width = width + "px"; });
+  const header = table.createTHead().insertRow();
+  for (const text of ["", ...sheet.widths.map((_, col) => columnLabel(col))]) {
+    const cell = document.createElement("th");
+    cell.scope = "col";
+    cell.textContent = text;
+    header.append(cell);
+  }
+
+  const spans = new Map();
+  const covered = new Set();
+  for (const range of sheet.merges) {
+    const [start, end] = range.split(":");
+    const firstRow = Number(start.slice(1)) - 1;
+    const lastRow = Number(end.slice(1)) - 1;
+    const firstCol = start.charCodeAt(0) - 65;
+    const lastCol = end.charCodeAt(0) - 65;
+    spans.set(start, [lastRow - firstRow + 1, lastCol - firstCol + 1]);
+    for (let row = firstRow; row <= lastRow; row++) {
+      for (let col = firstCol; col <= lastCol; col++) {
+        const address = excelAddress(row, col);
+        if (address !== start) covered.add(address);
+      }
+    }
+  }
+
+  const body = table.createTBody();
+  sheet.values.forEach((values, row) => {
+    const line = body.insertRow();
+    line.style.height = (sheet.heights[row + 1] ?? 25) + "px";
+    const rowNumber = document.createElement("th");
+    rowNumber.scope = "row";
+    rowNumber.textContent = row + 1;
+    line.append(rowNumber);
+    values.forEach((value, col) => {
+      const address = excelAddress(row, col);
+      if (covered.has(address)) return;
+      const cell = line.insertCell();
+      const span = spans.get(address);
+      if (span) [cell.rowSpan, cell.colSpan] = span;
+      cell.dataset.cell = address;
+      cell.textContent = value;
+      cell.style.cssText = valuationData.styles[sheet.styleIds[address] ?? 0];
+    });
+  });
+  workbookGrid.replaceChildren(table);
+  workbookGrid.scrollTop = workbookGrid.scrollLeft = 0;
+  [...sheetTabs.children].forEach((button, i) => button.setAttribute("aria-pressed", String(i === index)));
+  valuation("[data-val-active-sheet]").textContent = sheet.name;
+  selectValuationCell(table.querySelector(index === 0 ? '[data-cell="E8"]' : '[data-cell="A1"]'));
+}
+
+function selectValuationCell(cell) {
+  if (!cell) return;
+  currentCell?.classList.remove("selected");
+  currentCell = cell;
+  cell.classList.add("selected");
+  const address = cell.dataset.cell;
+  const row = Number(address.slice(1)) - 1;
+  const col = address.charCodeAt(0) - 65;
+  valuation("[data-val-address]").textContent = address;
+  valuation("[data-val-formula]").textContent = valuationData.sheets[currentSheet].formulas[row][col] || cell.textContent;
+}
+
+valuationData.sheets.forEach((sheet, index) => {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "valuation-sheet-tab";
+  button.textContent = sheet.name;
+  button.addEventListener("click", () => renderValuationSheet(index));
+  sheetTabs.append(button);
+});
+const chapterList = valuation("[data-val-chapters]");
+const chapterNav = valuation("[data-val-chapter-nav]");
+const dossierPage = valuation("[data-val-dossier-page]");
+valuationData.chapters.forEach((chapter, index) => {
+  const section = document.createElement("section");
+  section.className = "valuation-dossier-chapter";
+  const heading = section.appendChild(document.createElement("h4"));
+  heading.id = "valuation-dossier-chapter-" + (index + 1);
+  heading.tabIndex = -1;
+  heading.textContent = chapter.heading;
+  chapter.paragraphs.forEach(text => { section.appendChild(document.createElement("p")).textContent = text; });
+  chapterList.append(section);
+
+  const item = chapterNav.appendChild(document.createElement("li"));
+  const button = item.appendChild(document.createElement("button"));
+  button.type = "button";
+  button.textContent = chapter.heading;
+  button.setAttribute("aria-controls", heading.id);
+  button.addEventListener("click", () => {
+    dossierPage.scrollTop = section.offsetTop - 12;
+    heading.focus({ preventScroll: true });
+  });
+});
+const snapshotTime = valuation("[data-val-as-of]");
+snapshotTime.textContent = valuationData.asOf.slice(0, 16);
+snapshotTime.dateTime = valuationData.asOf.replace(" ", "T");
+
+valuationDialog.querySelectorAll("[data-val-start]").forEach(button => button.addEventListener("click", startValuationDemo));
+productButtons.forEach(button => button.addEventListener("click", () => selectValuationProduct(button.dataset.valProduct)));
+expandButton.addEventListener("click", () => setValuationExpanded(valuationDialog.dataset.expanded !== "true"));
+cloudSaveButton.addEventListener("click", () => {
+  cloudSavedVersions.add(openVersion);
+  updateValuationActions();
+});
+previousButton.addEventListener("click", showValuationResult);
+taskButton.addEventListener("click", () => {
+  if (progressTimer === null) showValuationResult();
+  else showValuationView("progress");
+});
+workbookGrid.addEventListener("click", event => selectValuationCell(event.target.closest("[data-cell]")));
+
+main.addEventListener("scroll", () => {
+  const showCompact = main.scrollTop >= 175;
+  if (showCompact === !compact.hidden) return;
+  compact.hidden = !showCompact;
+  const actions = showCompact ? compactActions : quoteActions;
+  actions.prepend(quoteValuation);
+}, { passive: true });
+window.addEventListener("resize", drawChart);
+drawChart();
+</script>
+</body>
+</html>

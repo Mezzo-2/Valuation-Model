@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import math
+import re
 from datetime import date
 from copy import copy
 from pathlib import Path
+from valuation.peer_valuation.judgment import resolve_model_pe
 
 from openpyxl import Workbook
 from openpyxl.cell.rich_text import CellRichText, TextBlock
@@ -11,7 +13,7 @@ from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from valuation.shared.markets import is_foreign, register_labels, valuation_factor, validate_pe_basis, valuation_fx_note, label as subject_label
-from valuation.workbook.market_config import (historical_rows, fee_rows, deductible_fees, assumption_rows, pnl_rows, operating_key, operating_margin_name, ratio_name, ratio_formula, foreign_pnl_formulas, pnl_note, assumption_history_formula)
+from valuation.workbook.market_config import (historical_rows, fee_rows, deductible_fees, assumption_rows, pnl_rows, operating_key, operating_margin_name, ratio_name, ratio_formula, foreign_pnl_formulas, pnl_notes, assumption_history_formula)
 
 from valuation.segment_research.methods import (
     RATE_FIELDS,
@@ -57,6 +59,7 @@ from valuation.workbook.styles import (
     EXTERNAL_RED,
     FORMULA_BLACK,
     INPUT_BLUE,
+    INK,
     MUTED,
     NEAR,
     ROW_LABEL_MARKET,
@@ -93,9 +96,14 @@ SHEET_ORDER = [
     "收入预测",
     "运营成本预测",
     "利润表预测",
-    "估值预测",
+    "相对估值预测",
     "历史财务数据",
 ]
+
+
+def sheet_order(spec):
+    from valuation.dcf.workbook import enabled
+    return SHEET_ORDER[:-1] + ["DCF估值", SHEET_ORDER[-1]] if enabled(spec) else list(SHEET_ORDER)
 
 def build_workbook(run_dir: Path) -> Path:
     reset_style_marks()
@@ -111,7 +119,8 @@ def build_workbook(run_dir: Path) -> Path:
     wb = Workbook()
     default = wb.active
     wb.remove(default)
-    for name in SHEET_ORDER:
+    order = sheet_order(spec)
+    for name in order:
         wb.create_sheet(name)
 
     register_labels(wb, facts)
@@ -122,9 +131,14 @@ def build_workbook(run_dir: Path) -> Path:
     _cost(wb, spec)
     _pnl(wb, spec)
     _valuation(wb, spec)
+    from valuation.dcf.workbook import enabled, build_dcf_sheets
+    if enabled(spec):
+        build_dcf_sheets(wb, spec)
+        from valuation.shared.io import dump_json
+        dump_json(spec_dir(run_dir) / "dcf_results.json", spec["dcf"])
     _summary(wb, spec)
 
-    wb._sheets.sort(key=lambda ws: SHEET_ORDER.index(ws.title))
+    wb._sheets.sort(key=lambda ws: order.index(ws.title))
     out = artifacts_dir(run_dir)
     out.mkdir(parents=True, exist_ok=True)
     path = out / workbook_filename(facts.get("company"), facts.get("ticker"))
@@ -207,6 +221,8 @@ def _hist(wb: Workbook, spec: dict) -> None:
                 ws.cell(r, _pcol(hist, year), f"={cell_ref(ws, '净利润', year, same_sheet=True)}-{cell_ref(ws, '归母净利润', year, same_sheet=True)}")
 
     metric_row = max(left, right) + 1
+    from valuation.dcf.workbook import write_historical_cashflow
+    write_historical_cashflow(ws, spec, metric_row)
     row = write_block_header(ws, metric_row, FS_LEFT_COL, ["历史指标", *hist])
     for i, (label, num_key, den_key) in enumerate(metrics):
         ws.cell(row=row, column=FS_LEFT_COL, value=label)
@@ -382,7 +398,7 @@ def _revenue(wb: Workbook, spec: dict) -> None:
 
     for group in groups:
         if group.drilled:
-            write_group_row(ws, row, group.parent, last)
+            write_group_row(ws, row, group.parent, last, parent=True)
             row += 1
             for child in group.children:
                 write_assumption(child)
@@ -396,7 +412,7 @@ def _revenue(wb: Workbook, spec: dict) -> None:
     top_lines: list[tuple[str, int]] = []
     for group in groups:
         if group.drilled:
-            write_group_row(ws, row, group.parent, last)
+            write_group_row(ws, row, group.parent, last, parent=True)
             row += 1
             parent_rev_row = row
             ws.cell(row=row, column=1, value="分部收入")
@@ -765,14 +781,11 @@ def _pnl(wb: Workbook, spec: dict) -> None:
         shares = f"'历史财务数据'!B{_row(wb['历史财务数据'], fs_label('当前总股本_百万股'))}"
         ws.cell(row=_row(ws, "EPS"), column=col(year), value=f"={ni2}*100/{shares}")
 
-    write_note(
-        ws,
-        _row(ws, "税前利润"),
-        last,
-        pnl_note(facts),
-    )
+    notes = pnl_notes(facts)
+    for label, text in notes.items():
+        write_note(ws, _row(ws, label), last, text)
     if foreign:
-        _wrap_note_block(ws, 3, _row(ws, "EPS"), last, pnl_note(facts))
+        _wrap_note_block(ws, 3, _row(ws, "EPS"), last, notes["税前利润"])
     for label in ("营业收入同比", "合并毛利率", "归母净利润同比"):
         ws.cell(row=_row(ws, label), column=1).alignment = Alignment(indent=1, vertical="center")
     year_end = last - 1
@@ -802,7 +815,7 @@ def _valuation(wb: Workbook, spec: dict) -> None:
     comps = spec["comps"]
     validate_pe_basis(facts, comps)
     fcst = facts["forecast_periods"]
-    ws = wb["估值预测"]
+    ws = wb["相对估值预测"]
     last = 6
     note_col = last
     row = write_first_section_header(ws, ["发布日期", *[f"{y}总营收" for y in fcst]])
@@ -857,7 +870,20 @@ def _valuation(wb: Workbook, spec: dict) -> None:
     ws.cell(row=row, column=1, value="核心池中位数")
     ws.cell(row=row, column=2, value=f"=MEDIAN(B{core_start}:B{core_end})")
     row += 1
-    mean_pe = f"B{_row(ws, '核心池均值')}"
+    model_pe, model_reason, independent = resolve_model_pe(comps)
+    ws.cell(row=row, column=1, value="模型给定PE")
+    if independent:
+        write_input(ws, row, 2, model_pe)
+    else:
+        ws.cell(row=row, column=2, value=f"=B{_row(ws, '核心池均值')}")
+    ws.merge_cells(start_row=row, start_column=3, end_row=row, end_column=note_col)
+    write_note(ws, row, 3, model_reason)
+    ws.cell(row, 3).alignment = Alignment(wrap_text=True, vertical="center")
+    units = sum(2 if ord(c) > 127 else 1 for c in model_reason)
+    ws.row_dimensions[row].height = max(30, math.ceil(units / 78) * 17 + 8)
+    ws.cell(row, 2).number_format = MULTIPLE_FMT
+    base_pe = f"$B${row}"
+    row += 1
     eps = cell_ref(wb["利润表预测"], "EPS", y1)
     price = "历史财务数据!B" + str(_row(wb["历史财务数据"], fs_label("当前股价")))
     if is_foreign(facts):
@@ -891,14 +917,14 @@ def _valuation(wb: Workbook, spec: dict) -> None:
         ws.cell(row=row, column=2, value=coef)
         if isinstance(coef, (int, float)) and not isinstance(coef, bool):
             mark_input(ws, row, 2)
-        ws.cell(row=row, column=3, value=f"=B{row}*{mean_pe}")
+        ws.cell(row=row, column=3, value=f"=B{row}*{base_pe}")
         ws.cell(row=row, column=4, value=f"=C{row}*{eps}")
         ws.cell(row=row, column=5, value=f"=D{row}/{price}-1")
         row += 1
     ws.cell(row=row, column=1, value="目标PE")
     ws.cell(row=row, column=2, value=f"=C{neutral}")
     row += 1
-    ws.cell(row=row, column=1, value="合理价值区间")
+    ws.cell(row=row, column=1, value=RELATIVE_RANGE_LABEL)
     bear, _neutral_row, bull = scenario_rows
     ws.cell(
         row=row,
@@ -906,7 +932,7 @@ def _valuation(wb: Workbook, spec: dict) -> None:
         value=f'=TEXT(D{bear},"{NUM_FMT}")&" - "&TEXT(D{bull},"{NUM_FMT}")',
     )
     row += 1
-    ws.cell(row=row, column=1, value="中枢目标价")
+    ws.cell(row=row, column=1, value=RELATIVE_TARGET_LABEL)
     ws.cell(row=row, column=2, value=f"=D{neutral}")
     row += 1
     ws.cell(row=row, column=1, value="较现价空间")
@@ -919,9 +945,10 @@ def _valuation(wb: Workbook, spec: dict) -> None:
     _ = median_row
     mark_bold_row(ws, _row(ws, "核心池均值"), 1, 3)
     mark_bold_row(ws, _row(ws, "核心池中位数"), 1, 2)
+    mark_bold_row(ws, _row(ws, "模型给定PE"), 1, 2)
     for scenario in scenario_rows:
         mark_bold_row(ws, scenario, 1, 5)
-    for label in ("合理价值区间", "较现价空间", "中枢目标价"):
+    for label in (RELATIVE_RANGE_LABEL, "较现价空间", RELATIVE_TARGET_LABEL):
         result_row = _row(ws, label)
         mark_result_cell(ws, result_row, 1)
         mark_result_cell(ws, result_row, 2)
@@ -957,6 +984,24 @@ def _mcap_unit(currency: object) -> str:
     return {"CNY": "亿元", "HKD": "亿港元", "USD": "亿美元"}.get(code, code)
 
 
+RELATIVE_TARGET_LABEL = "相对估值目标价"
+RELATIVE_RANGE_LABEL = "相对估值区间"
+
+
+def summary_overview_labels(facts: dict) -> dict[str, str]:
+    units = {"CNY": "元", "HKD": "港元", "USD": "美元"}
+    quote_unit = units.get(facts.get("trading_currency") or "CNY", facts.get("trading_currency"))
+    eps_unit = units.get(facts.get("currency") or "CNY", facts.get("currency"))
+    return {
+        "price": f"当前股价（{quote_unit}）",
+        "target": f"{RELATIVE_TARGET_LABEL}（{quote_unit}）",
+        "range": f"{RELATIVE_RANGE_LABEL}（{quote_unit}）",
+        "forecast_eps": f"{facts['forecast_periods'][0]} EPS（{eps_unit}）",
+        "actual_eps": f"{facts['hist_periods'][-1]} EPS（{eps_unit}）",
+        "dcf_price": f"DCF每股价值（{quote_unit}）",
+    }
+
+
 def _summary(wb: Workbook, spec: dict) -> None:
     from valuation.research_dossier.schema import DISCLAIMER, point_text, point_title
 
@@ -970,7 +1015,7 @@ def _summary(wb: Workbook, spec: dict) -> None:
     periods_all = hist + fcst
     pnl = wb["利润表预测"]
     cost = wb["运营成本预测"]
-    val = wb["估值预测"]
+    val = wb["相对估值预测"]
     fs = wb["历史财务数据"]
     ws = wb["总结"]
     _set_summary_widths(ws)
@@ -978,20 +1023,40 @@ def _summary(wb: Workbook, spec: dict) -> None:
     write_spacer(ws, row)
     row += 1
 
+    labels = summary_overview_labels(facts)
     overview = [
-        ("当前股价", f"=历史财务数据!B{_row(fs, fs_label('当前股价'))}"),
-        ("中枢目标价", f"=估值预测!B{_row(val, '中枢目标价')}"),
-        ("较现价空间", f"=估值预测!B{_row(val, '较现价空间')}"),
-        ("合理价值区间", f"=估值预测!B{_row(val, '合理价值区间')}"),
-        ("目标PE", f"=估值预测!B{_row(val, '目标PE')}"),
-        ("EPS_预测首年", f"={cell_ref(pnl, 'EPS', fcst[0])}"),
-        ("EPS_最近实际", f"={cell_ref(pnl, 'EPS', last_a)}"),
-        ("投资评级", f"=估值预测!B{_row(val, '投资评级')}"),
+        (labels["price"], f"=历史财务数据!B{_row(fs, fs_label('当前股价'))}"),
+        (labels["target"], f"=相对估值预测!B{_row(val, RELATIVE_TARGET_LABEL)}"),
+        ("较现价空间", f"=相对估值预测!B{_row(val, '较现价空间')}"),
+        ("投资评级", f"=相对估值预测!B{_row(val, '投资评级')}"),
+        ("目标PE", f"=相对估值预测!B{_row(val, '目标PE')}"),
+        (labels["forecast_eps"], f"={cell_ref(pnl, 'EPS', fcst[0])}"),
+        (labels["range"], f"=相对估值预测!B{_row(val, RELATIVE_RANGE_LABEL)}"),
+        (labels["actual_eps"], f"={cell_ref(pnl, 'EPS', last_a)}"),
     ]
+    from valuation.dcf.workbook import enabled
+    dcf_pairs = []
+    if enabled(spec):
+        from valuation.dcf.workbook import result_ref
+        status = result_ref(wb['DCF估值'], 'status')
+        dcf_pairs = [
+            (labels["dcf_price"], "="+result_ref(wb['DCF估值'],'price')),
+            ("DCF较现价空间", "="+result_ref(wb['DCF估值'],'upside')),
+            ("折现率 WACC", "="+result_ref(wb['DCF估值'],'wacc')),
+            ("永续增长率", "="+result_ref(wb['DCF估值'],'growth')),
+            ("终值现值占比", "="+result_ref(wb['DCF估值'],'terminal_share')),
+            ("假设状态", f'=IF({status}="采用估计","含估计参数",{status})'),
+        ]
     market = _market_pairs(info, fs, facts=facts)
     write_section_row(ws, row, ["估值概览"], _SUM_LEFT_END, start_col=_SUM_LEFT)
     write_section_row(ws, row, ["当前行情"], _SUM_RIGHT_END, start_col=_SUM_RIGHT)
     left_end, large = _write_value_pairs(ws, row + 1, overview, _SUM_LEFT, ROW_LABEL_VAL)
+    overview_blocks = [(row + 1, overview)]
+    if dcf_pairs:
+        write_group_row(ws, left_end, "DCF交叉验证", _SUM_LEFT_END, start_col=_SUM_LEFT)
+        overview_blocks.append((left_end + 1, dcf_pairs))
+        left_end, dcf_large = _write_value_pairs(ws, left_end + 1, dcf_pairs, _SUM_LEFT, ROW_LABEL_VAL)
+        large.extend(dcf_large)
     right_end, _ = _write_value_pairs(ws, row + 1, market, _SUM_RIGHT, ROW_LABEL_MARKET)
     row = _after_pair(ws, left_end, right_end)
 
@@ -1041,6 +1106,7 @@ def _summary(wb: Workbook, spec: dict) -> None:
     for item_row, item_col in large:
         _enlarge_result(ws.cell(row=item_row, column=item_col))
     _format_market_numbers(ws, facts, ((1, 2, 5), (3, 5, 5), (7, 8, 11), (9, 11, 11)))
+    _format_summary_overview(ws, overview_blocks)
 
 
 _SUM_LEFT = 1
@@ -1051,8 +1117,8 @@ _SUM_LAST = 11
 _LEGEND_ROW = 2
 _LEGEND_LABEL_COL = 7
 _LEGEND_TEXT_COL = 8
-_OVERVIEW_RESULTS = {"中枢目标价", "合理价值区间", "较现价空间"}
-_OVERVIEW_LARGE = {"中枢目标价", "较现价空间"}
+_OVERVIEW_RESULTS = {RELATIVE_TARGET_LABEL, "较现价空间", "投资评级"}
+_OVERVIEW_LARGE = {RELATIVE_TARGET_LABEL, "较现价空间"}
 _FS_LINE_LABELS = {"资产总计", "总负债", "负债和股东权益总计"}
 _FS_FILL_LABELS = {"归母净利润", "净利润"}
 
@@ -1236,15 +1302,40 @@ def _write_value_pairs(
                     end_column=label_end,
                 )
             ws.cell(row=row, column=value_col, value=value)
-            if label in _OVERVIEW_RESULTS:
-                mark_result_cell(ws, row, label_col)
+            base_label = label.split("（", 1)[0]
+            if base_label in _OVERVIEW_RESULTS:
+                for col in range(label_col, label_end + 1):
+                    mark_result_cell(ws, row, col)
                 mark_result_cell(ws, row, value_col)
-            if label in _OVERVIEW_LARGE:
+            if base_label in _OVERVIEW_LARGE:
                 large.append((row, value_col))
         ws.row_dimensions[row].height = 20
         row += 1
         index += 2
     return row, large
+
+
+def _format_summary_overview(ws, blocks) -> None:
+    """概览按结果层级着色；内缩区分左右两组，不扩展现有列。"""
+    for first_row, pairs in blocks:
+        for index, (label, _value) in enumerate(pairs):
+            row = first_row + index // 2
+            label_col, value_col = (1, 2) if index % 2 == 0 else (3, 5)
+            emphasized = label.split("（", 1)[0] in _OVERVIEW_RESULTS
+            label_cell = ws.cell(row, label_col)
+            font = copy(label_cell.font)
+            font.color = INK
+            font.bold = emphasized
+            label_cell.font = font
+            label_cell.alignment = Alignment(horizontal="left", vertical="center", indent=int(label_col == 3))
+            value_cell = ws.cell(row, value_col)
+            font = copy(value_cell.font)
+            font.color = MUTED if label == "假设状态" else INK
+            font.bold = emphasized
+            value_cell.font = font
+            value_cell.alignment = Alignment(horizontal="right", vertical="center", indent=1)
+            if emphasized:
+                ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 20, 22)
 
 
 def _market_pairs(info: dict, fs, *, facts=None) -> list[tuple[str, object]]:
@@ -1503,7 +1594,7 @@ def _format_market_numbers(ws, facts, blocks):
     for label_col, first, last in blocks:
         for row in range(2, ws.max_row+1):
             name = str(ws.cell(row, label_col).value or "")
-            fmt = ("0.0000;[Red](0.0000);0.0000" if "每股收益" in name or name.startswith("EPS_") else
+            fmt = ("0.0000;[Red]-0.0000;0.0000" if "每股收益" in name or name.startswith("EPS_") or re.match(r"\d{4}[AE] EPS", name) else
                    choose_number_format("有效税率") if name == "税费/税前利润" else None)
             if fmt:
                 for col in range(first, last+1):

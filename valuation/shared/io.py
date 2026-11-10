@@ -43,5 +43,10 @@ def _safe_filename(text: str | None) -> str:
     return cleaned.strip(" .")
 
 
+def safe_segment_filename(segment: str) -> str:
+    text = str(segment or "").strip().replace("/", "／").replace("\\", "＼")
+    return _safe_filename(text) or "未命名分部"
+
+
 def dossier_path(run_dir: Path, company: str | None = None) -> Path:
     return artifacts_dir(run_dir) / "research_dossier.md"

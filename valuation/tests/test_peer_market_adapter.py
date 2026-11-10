@@ -86,7 +86,7 @@ class PeerMarketAdapterTests(unittest.TestCase):
             self.assertEqual(report["calc_fails"],[])
             self.assertEqual(report["format_fails"],[])
             wb=load_workbook(path)
-            ws=wb["估值预测"]
+            ws=wb["相对估值预测"]
             self.assertTrue(any(c.value=="2026E PE" for row in ws for c in row))
             self.assertFalse(any("未返回盈利口径" in str(c.value) for row in ws for c in row))
 
@@ -287,7 +287,7 @@ class LiveConsensusFxTests(unittest.TestCase):
         f = facts("HK")
         f["valuation_fx"] = {"base": "USD", "quote": "CNY", "rate": 999}
         mcp = self.client(self.raw({"year": 2026, "revenue": 10_000_000_000, "unit": "USD"}))
-        mcp.call.return_value = fx_reply("USD", [("2026-10-26", 7)])
+        mcp.call.return_value = fx_reply("USD", [("2026-10-10", 7)])
         mcp.call.side_effect = None
         with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(ValueError, "接口有预测金额"):
             fetch_subject_consensus(mcp, f, Path(directory), [])
@@ -354,7 +354,7 @@ class LiveConsensusFxTests(unittest.TestCase):
             with patch("valuation.workbook.build.load_spec", return_value=spec):
                 path = build_workbook(Path(directory))
             wb = load_workbook(path)
-            self.assertEqual([wb["估值预测"].cell(3, c).value for c in (3, 4, 5)], [700, 700, 700])
+            self.assertEqual([wb["相对估值预测"].cell(3, c).value for c in (3, 4, 5)], [700, 700, 700])
             self.assertIn("2026-10-28", spec["consensus"]["revenue_note"])
 
     def test_latest_report_is_selected_per_metric_and_forecast_year(self):

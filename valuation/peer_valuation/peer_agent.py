@@ -1,4 +1,4 @@
-"""同业两拍：先提名，代码填 PE，再选核心池。"""
+"""先提名、代码填 PE，再选择核心池并独立判断模型 PE。"""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from statistics import mean, median
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -20,7 +21,8 @@ from valuation.peer_valuation.fetch import (
     fill_candidates,
 )
 from valuation.peer_valuation.schema import CORE_MIN, require_comps
-from valuation.segment_research.brief_agent import format_brief_for_forecast
+from valuation.segment_research.brief_agent import format_brief_for_forecast, read_research_hit as _read_brief_hit
+from valuation.peer_valuation.context import load_operating_context
 from valuation.segment_split.collect import _mcp_typed_search
 from valuation.segment_split.schema import SchemaError
 from valuation.segment_split.split_agent import _log, _log_messages
@@ -51,8 +53,10 @@ class CorePick(BaseModel):
 
 class ClassifyDraft(BaseModel):
     core: list[CorePick] = Field(description="至少 4 家，只能选自有 pe_y1 的行")
-    pe_adjust: float = Field(1.0, description="默认 1。偏离必须在 rationale 写量化理由")
-    rationale: str = Field(description="为何纳入或排除：业务和财务属性优先")
+    model_pe: float = Field(gt=0, allow_inf_nan=False, description="独立判断的合理PE，对应本公司预测首年EPS；不得默认取同业均值")
+    model_pe_reason: str = Field(min_length=1, description="一至两句简要理由，点出主要同业参照及本公司为何适用该倍数，供Excel展示")
+    model_pe_sources: list[str] = Field(default_factory=list, description="补查材料中实际影响判断且已展开读取的ref；只用注入的已有研究时可留空")
+    rationale: str = Field(description="同业纳入/排除和合理PE判断的详细解释，区分已知事实和推测")
     open_gaps: list[str] = Field(default_factory=list)
 
 
@@ -64,8 +68,8 @@ class NominateDeps:
     briefs_text: str
     search: TypedSearchFn
     screen: ScreenFn
-    max_searches: int = 1
-    max_screens: int = 1
+    max_searches: int = 2
+    max_screens: int = 2
     verbose: bool = True
     hits: list[dict[str, Any]] = field(default_factory=list)
     queries: list[dict[str, Any]] = field(default_factory=list)
@@ -94,6 +98,25 @@ class ClassifyDeps:
     filled: list[dict[str, Any]]
     y1: str
     verbose: bool = True
+    operating: dict = field(default_factory=dict)
+    briefs_text: str = ""
+    search: TypedSearchFn | None = None
+    seed_hits: list[dict[str, Any]] = field(default_factory=list)
+    hits: list[dict[str, Any]] = field(default_factory=list)
+    queries: list[dict[str, Any]] = field(default_factory=list)
+    reads: list[dict[str, Any]] = field(default_factory=list)
+    search_seq: int = 0
+    read_seq: int = 0
+    max_searches: int = 4
+    max_reads: int = 4
+
+    @property
+    def searches_left(self) -> int:
+        return max(0, self.max_searches - self.search_seq) if self.search else 0
+
+    @property
+    def reads_left(self) -> int:
+        return max(0, self.max_reads - self.read_seq)
 
     @property
     def label(self) -> str:
@@ -127,10 +150,10 @@ nominate_agent = Agent(
 
 @nominate_agent.tool
 def screen_peers(ctx: RunContext[NominateDeps], concept: str) -> str:
-    """按概念补一批候选代码。只能用一次。"""
+    """按概念补一批候选代码。"""
     deps = ctx.deps
     if _bad_concept(concept):
-        return "概念用短词，例如 服务器、电子制造。这次不计数。"
+        return "概念用短词，例如 锂电池、服务器、医疗器械。这次不计数。"
     if deps.screens_left <= 0:
         return "选股次数已用完。"
     deps.screen_seq += 1
@@ -147,7 +170,7 @@ def search_research(
     content_type: ContentType = "domestic_report",
     allow_image: bool = False,
 ) -> str:
-    """检索同业或可比估值相关材料。只能用一次。"""
+    """检索同业或可比估值相关材料。"""
     deps = ctx.deps
     if deps.searches_left <= 0:
         return "检索次数已用完。"
@@ -172,14 +195,20 @@ def search_research(
 def _classify_instructions(ctx: RunContext[ClassifyDeps]) -> str:
     deps = ctx.deps
     return (
-        f"你在为{deps.label}选核心同业池。预测首年是{deps.y1}。\n"
-        "只能读已填好的表。有 pe_y1 的才能进核心池，至少 4 家。\n"
-        f"pe_y1采用接口最新预测年PE，统一写成{deps.y1} PE。\n"
+        f"你是{deps.label}的估值分析师，选择核心同业并独立给出合理PE。预测首年是{deps.y1}。\n"
+        "核心池只能选已填表中有 pe_y1 的公司，至少 4 家；不能补造证券身份或PE。\n"
+        f"pe_y1来自接口最新预测年，展示为{deps.y1} PE；财年或盈利口径明确冲突时不得用于定价，元数据缺失不能当作已确认一致。\n"
         "证券身份以接口返回的公司名称和代码为准，提名理由不能覆盖证券身份；名称代码错配时不能入池。\n"
-        "先按业务再看财务。高倍数若业务可比可留在核心池，离散度写进 note 或 rationale，必要时用 pe_adjust。\n"
+        "先按业务再看财务。高低倍数都可以保留在核心池，但留在池中不意味着其倍数必须等权参与定价。\n"
         "备注统一用一至两句写业务可比点、主要差异及当年PE水平；不要重复接口名称、字段名或缺少元数据等通用说明。\n"
         "小样本可以保留。覆盖不够写缺口，核心池只放业务可比的名字。\n"
-        "pe_adjust 默认 1。要偏离须写出量化理由。"
+        "model_pe是本公司合理的基础PE。先指出主要参考哪些同业和估值区间，再结合本公司增长质量、利润率、商业模式、现金回报及风险说明定位。\n"
+        "均值、中位数仅作分布参考，不能默认采用，也不能为了压低估值而机械删除高倍数。合理PE可以接近统计值，但必须有针对本公司的依据。\n"
+        "异常倍数可能与低基数、亏损恢复、一次性损益或增长预期有关；原因须核实，未核实时只能表述为可能性。历史和预测、季度累计和全年不能混比。\n"
+        f"可按需检索 {deps.searches_left} 次、展开 {deps.reads_left} 次。重点补查主要参照和重大疑点，已有材料够用即可停止。\n"
+        "补查材料中的关键数字或异常成因须用read_valuation_research展开核实，model_pe_sources只填实际已读且影响判断的ref。\n"
+        "model_pe_reason用一至两句简要说明主要参照及给定倍数的原因，详细取舍放rationale；来源不足写缺口，不编造。\n"
+        "只判断一个基础PE，情景系数由原模板计算。不能为了贴近现价或得到买入评级倒推PE。"
     )
 
 
@@ -191,8 +220,41 @@ classify_agent = Agent(
 )
 
 
+@classify_agent.tool
+def search_valuation_research(
+    ctx: RunContext[ClassifyDeps], query: str,
+    content_type: ContentType = "domestic_report", allow_image: bool = False,
+) -> str:
+    """按需核实主要同业的业务、盈利状态和合理估值依据。"""
+    deps = ctx.deps
+    if deps.searches_left <= 0:
+        return "检索次数已用完，请使用已有研究并明确缺口。"
+    deps.search_seq += 1
+    query_id = f"peer_valuation_{deps.search_seq}"
+    hits = deps.search(query, allow_image, query_id, content_type)
+    hits = [{**hit, "ref": f"{query_id}:{i}"} for i, hit in enumerate(hits, 1)]
+    deps.hits.extend(hits)
+    deps.queries.append({"id": query_id, "query": query, "content_type": content_type, "hits": len(hits)})
+    _log(deps, f"[peer] 估值补查 {query}：{len(hits)}条")
+    return json.dumps(_valuation_hits_view(hits), ensure_ascii=False)
+
+
+@classify_agent.tool
+def read_valuation_research(
+    ctx: RunContext[ClassifyDeps], ref: str, focus: str = "", offset: int = 0,
+) -> str:
+    """展开检索命中的原片段，核实关键事实及其期间。"""
+    return _read_brief_hit(ctx, ref, focus, offset)
+
+
+def _valuation_hits_view(hits: list[dict]) -> list[dict]:
+    return [{key: hit.get(key) for key in ("ref", "title", "institution", "date")}
+            | {"peek": _peek(str(hit.get("snippet") or ""))} for hit in hits[:10]]
+
+
 def run_live_peers(run_dir: Path) -> tuple[dict, dict]:
     facts = load_json(spec_dir(run_dir) / "facts.json")
+    operating = load_operating_context(run_dir, facts)
     log_root = logs_dir(run_dir) / "mcp"
     log_root.mkdir(parents=True, exist_ok=True)
     calls: list[dict[str, Any]] = []
@@ -236,7 +298,7 @@ def run_live_peers(run_dir: Path) -> tuple[dict, dict]:
         if len(usable) < 4:
             filled = _merge_filled(
                 filled,
-                _supplement_filled(mcp, facts, filled, calls, log_root),
+                _supplement_filled(mcp, facts, filled, calls, log_root, deps.briefs_text),
             )
             usable = [item for item in filled if item.get("pe_y1") is not None]
         dump_json(log_root / "peer_filled.json", filled)
@@ -248,7 +310,19 @@ def run_live_peers(run_dir: Path) -> tuple[dict, dict]:
                     for item in filled
                 )
             )
-        card = _run_classify(facts, filled, chat)
+        valuation_deps = ClassifyDeps(
+            company=deps.company, ticker=deps.ticker, filled=filled,
+            y1=str(facts["forecast_periods"][0]), operating=operating,
+            briefs_text=deps.briefs_text, search=deps.search,
+            seed_hits=[{**hit, "ref": f"nominate:{i}"} for i, hit in enumerate(deps.hits, 1)],
+        )
+        try:
+            card = _run_classify(facts, filled, chat, deps=valuation_deps)
+        finally:
+            dump_json(log_root / "peer_valuation_research.json", {
+                "operating": operating, "queries": valuation_deps.queries,
+                "reads": valuation_deps.reads, "hits": valuation_deps.seed_hits + valuation_deps.hits,
+            })
     dump_json(logs_dir(run_dir) / "search_log_peer.json", calls)
     dump_json(spec_dir(run_dir) / "comps_spec.json", card)
     return cons, card
@@ -270,7 +344,7 @@ def _run_nominate_more(facts: dict, filled: list[dict[str, Any]], chat) -> Nomin
     )
     from valuation.shared.markets import is_foreign
     preference = ("优先同市场、业务相近且盈利口径可比的公司。" if is_foreign(facts)
-                  else "优先服务器、ODM、电子制造，卖方覆盖要够。")
+                  else "优先与本公司实际业务相近且卖方覆盖充分的 A 股。")
     market = str(facts.get("market_type")) if is_foreign(facts) else "A 股"
     prompt = (
         f"本公司 {deps.label}。已填表：{have}。\n"
@@ -302,9 +376,9 @@ def _run_nominate(deps: NominateDeps, chat) -> NominateDraft:
     return result.output
 
 
-def _run_classify(facts: dict, filled: list[dict[str, Any]], chat) -> dict:
+def _run_classify(facts: dict, filled: list[dict[str, Any]], chat, *, deps: ClassifyDeps | None = None) -> dict:
     y1 = str((facts.get("forecast_periods") or ["2026E"])[0])
-    deps = ClassifyDeps(
+    deps = deps or ClassifyDeps(
         company=str(facts.get("company") or ""),
         ticker=str(facts.get("ticker") or ""),
         filled=filled,
@@ -320,12 +394,24 @@ def _run_classify(facts: dict, filled: list[dict[str, Any]], chat) -> dict:
         payload = {
             "ts": datetime.now().isoformat(timespec="seconds"),
             "core": [item.model_dump() for item in draft.core],
-            "pe_adjust": draft.pe_adjust,
+            "schema_version": 2,
+            "model_pe": draft.model_pe,
+            "model_pe_reason": draft.model_pe_reason,
+            "pe_adjust": 1.0,
             "rationale": draft.rationale,
             "open_gaps": draft.open_gaps,
         }
         try:
-            card = require_comps(payload, facts, filled)
+            read_refs = {item["ref"] for item in deps.reads}
+            missing = set(draft.model_pe_sources) - read_refs
+            if missing:
+                raise SchemaError(["估值来源必须实际展开读取：" + "、".join(sorted(missing))])
+            selected = set(draft.model_pe_sources)
+            payload["model_pe_sources"] = [
+                {key: hit.get(key) for key in ("ref", "title", "institution", "date", "doc_id", "chunk_id")}
+                for hit in deps.seed_hits + deps.hits if hit.get("ref") in selected
+            ]
+            card = require_comps(payload, facts, filled, require_model_pe=True)
             for gap in _coverage_gaps(filled, card.get("core") or []):
                 if gap not in card["open_gaps"]:
                     card["open_gaps"].append(gap)
@@ -333,7 +419,8 @@ def _run_classify(facts: dict, filled: list[dict[str, Any]], chat) -> dict:
         except SchemaError as exc:
             last_errors = list(exc.errors)
             _log(deps, "[peer] 不合法：" + "；".join(last_errors))
-            hint = "不合法：" + "；".join(last_errors)
+            prev_json = json.dumps(draft.model_dump(), ensure_ascii=False)
+            hint = f"上次草稿：{prev_json}\n不合法：{'；'.join(last_errors)}"
     raise SchemaError(last_errors or ["同业分类失败"])
 
 
@@ -352,12 +439,21 @@ def _nominate_user(deps: NominateDeps) -> str:
 def _classify_user(deps: ClassifyDeps, hint: str) -> str:
     usable = [item for item in deps.filled if item.get("pe_y1") is not None]
     text = (
+        "本公司经营预测（金额、期间及来源按原记录，比例为小数）：\n"
+        f"{json.dumps(deps.operating, ensure_ascii=False)}\n"
+        f"已有分部研究：\n{deps.briefs_text}\n"
         f"预测首年 {deps.y1}。有 pe_y1 的才能进核心池，下面这些可用：\n"
         f"{json.dumps(usable, ensure_ascii=False)}\n"
         "其余候选：\n"
         f"{json.dumps([item for item in deps.filled if item.get('pe_y1') is None], ensure_ascii=False)}\n"
         "核心至少 4 家。先按业务再看财务；不进核心须写业务或财务理由。覆盖不够写缺口。\n"
     )
+    pes = [float(item["pe_y1"]) for item in usable]
+    if pes:
+        text += "全部可用候选的统计背景（不是选定核心池的统计，也不是目标PE）：\n"
+        text += json.dumps({"mean": mean(pes), "median": median(pes), "min": min(pes), "max": max(pes)}, ensure_ascii=False) + "\n"
+    if deps.seed_hits:
+        text += "提名阶段已有检索线索，可按ref展开核实：\n" + json.dumps(_valuation_hits_view(deps.seed_hits), ensure_ascii=False) + "\n"
     if hint:
         text += hint
     return text
@@ -425,22 +521,42 @@ def _parse_screener(raw: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _supplement_concepts(facts: dict, briefs_text: str = "") -> list[str]:
+    """从公司申万行业及分部名称动态提取选股概念词，避免跨行业硬编码污染。"""
+    concepts: list[str] = []
+    profile = (facts.get("company_info") or {}).get("profile") or {}
+    sw = str(profile.get("sw_industry") or "")
+    for part in reversed([p.strip() for p in sw.split("/") if p.strip()]):
+        if not _bad_concept(part) and part not in concepts:
+            concepts.append(part)
+    for line in (briefs_text or "").splitlines():
+        if line.startswith("—— ") and line.endswith(" ——"):
+            seg = line.strip("— ").strip()
+            if seg and seg not in {"其他", "其他业务"} and not _bad_concept(seg) and seg not in concepts:
+                concepts.append(seg)
+    return concepts[:4]
+
+
 def _supplement_filled(
     mcp: ComeinClient,
     facts: dict,
     filled: list[dict[str, Any]],
     calls: list[dict[str, Any]],
     log_root: Path,
+    briefs_text: str = "",
 ) -> list[dict[str, Any]]:
     from valuation.shared.markets import is_foreign
     if is_foreign(facts):
-        return []  # 原有选股器的固定 A 股行业补池仅用于 A 股。
+        return []  # A 股选股器补池仅用于 A 股。
+    concepts = _supplement_concepts(facts, briefs_text)
+    if not concepts:
+        return []
     have = {_norm_ticker(item.get("ticker")) for item in filled}
     have.add(_norm_ticker(facts.get("ticker")))
     have.discard("")
     screen = _screen_fn(mcp, calls, log_root)
     picks: list[dict[str, Any]] = []
-    for concept in ("消费电子", "云计算", "算力"):
+    for concept in concepts:
         for row in screen(concept):
             ticker = _norm_ticker(row.get("ticker"))
             if not ticker or ticker in have:

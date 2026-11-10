@@ -301,7 +301,7 @@ class ForeignWorkbookTests(unittest.TestCase):
 
     def test_labels_formulas_missing_values_and_conversion(self):
         f=facts();c=cost(f);wb=Workbook();wb.remove(wb.active)
-        for n in ["历史财务数据","收入预测","运营成本预测","利润表预测","估值预测"]:wb.create_sheet(n)
+        for n in ["历史财务数据","收入预测","运营成本预测","利润表预测","相对估值预测"]:wb.create_sheet(n)
         register_labels(wb,f)
         write_hist(wb,{"facts":f})
         rev=wb["收入预测"];periods=f["hist_periods"]+f["forecast_periods"]

@@ -17,7 +17,7 @@ from valuation.segment_split.schema import FALLBACK_METHOD, METHOD_ORDER, canoni
 from valuation.segment_split.split_agent import _log, _log_messages
 from valuation.segment_split.split_plan import is_residual_name
 from valuation.shared.env import build_chat_model
-from valuation.shared.io import dump_json, load_json, spec_dir
+from valuation.shared.io import dump_json, load_json, safe_segment_filename, spec_dir
 
 
 class ForecastDraft(BaseModel):
@@ -104,7 +104,7 @@ def _driver_hint(method: str, hist_need: str) -> str:
         return (
             "历史销量×单价/fx 对上已锁定的分部收入。"
             "先用笔记里已实现的量或价；缺的一侧可用锁定收入回推。"
-            "若用指数，说明它是分析代理变量。unit_meta.fx 自报。"
+            "指数必须有独立经营依据，不能把收入改名为销量再固定单价为1。unit_meta.fx 自报。"
         )
     if method in FX_METHODS:
         return (
@@ -142,6 +142,8 @@ def _forecast_instructions(ctx: RunContext[ForecastDeps]) -> str:
         f"锁定收入的金额单位为{deps.facts.get('unit') or '亿元'}，量价单位及转换须与该金额币种对应。\n"
         f"{pick}\n"
         "historical_data 只写历史年；预测数字由你根据材料独立判断。\n"
+        "缺少独立量价依据时用收入增速法，不能以收入当量指数、等价销量乘固定单价伪装量价模型。"
+        "缺失历史不能当作真实零或新增业务；发现此问题须指出上游拆分缺口。\n"
         f"{_analyst_guidance()}"
     )
 
@@ -174,7 +176,7 @@ def run_live_forecast(run_dir: Path, segment: str, brief: dict) -> dict:
         card = require_forecast(payload, facts, notes_seg=notes_seg)
     except SchemaError as exc:
         raise SystemExit("分部预测未通过规范表:\n  " + "\n  ".join(exc.errors)) from exc
-    dump_json(spec_dir(run_dir) / f"forecast_notes_{segment}.json", card)
+    dump_json(spec_dir(run_dir) / f"forecast_notes_{safe_segment_filename(segment)}.json", card)
     write_method_to_notes(
         run_dir,
         segment,
@@ -287,7 +289,9 @@ def _retry_hint(deps: ForecastDeps, draft: ForecastDraft, errors: list[str]) -> 
         extra = "unit_meta.fx 自报，和单位对得上。"
     elif method not in {"", "收入增速法"}:
         extra = "驱动测算对上锁定分部收入。"
+    prev_json = json.dumps(draft.model_dump(), ensure_ascii=False)
     return (
+        f"上次草稿：{prev_json}\n"
         f"不合法：{'；'.join(errors)}。"
         f"你选了{method}。historical_data 外层只能写 {hist_need}。"
         f"final_forecast 外层只能写 {fcst_need}。{extra}"

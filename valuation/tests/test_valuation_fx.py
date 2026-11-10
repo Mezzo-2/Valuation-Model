@@ -24,7 +24,7 @@ def reply(currency="HKD", rows=None):
 
 class ValuationFxTests(unittest.TestCase):
     def test_accepts_same_day_and_excludes_future_stale_invalid_quotes(self):
-        raw=reply(rows=[("2025-10-28",.5),("2025-10-27",.7),("2025-10-26",.85),("2025-10-25",.86),
+        raw=reply(rows=[("2025-10-28",.5),("2025-10-27",.7),("2025-10-26",.85),("2025-10-15",.86),
                         ("2025-10-23",0),("2025-10-22",-1),("2025-10-21","nan"),("2025-10-01",.9)])
         self.assertEqual(parse_fixing_rates(raw,INDICATORS["HKD"],AS_OF),{date(2025,10,27):.7,date(2025,10,26):.85})
 
@@ -120,9 +120,13 @@ class ValuationFxTests(unittest.TestCase):
         self.assertEqual(mcp.call.call_args.args[1]["start"],"202510")
         self.assertEqual(mcp.call.call_args.args[1]["end"],"202511")
 
-    def test_weekend_does_not_extend_past_previous_calendar_day(self):
-        with self.assertRaisesRegex(ValueError,"当天及前一天"):
-            parse_fixing_rates(reply(rows=[("2025-10-31",.85)]),INDICATORS["HKD"],date(2025,11,2))
+    def test_weekend_and_holiday_fallback_within_window_and_rejects_expired(self):
+        self.assertEqual(
+            parse_fixing_rates(reply(rows=[("2025-10-31",.85)]),INDICATORS["HKD"],date(2025,11,2)),
+            {date(2025,10,31):.85},
+        )
+        with self.assertRaisesRegex(ValueError,"近期交易日"):
+            parse_fixing_rates(reply(rows=[("2025-10-15",.85)]),INDICATORS["HKD"],date(2025,11,2))
 
     def test_conflicting_same_day_values_are_rejected(self):
         with self.assertRaisesRegex(ValueError,"同日汇率值冲突"):
@@ -134,7 +138,7 @@ class ValuationFxTests(unittest.TestCase):
                "valuation_fx":{"base":"CNY","quote":"HKD","rate":1.2}}
         with tempfile.TemporaryDirectory() as directory,patch("valuation.historical_financials.fx.run_date",return_value=AS_OF),patch("valuation.historical_financials.fx.ComeinClient") as client:
             run=Path(directory);dump_json(run/"facts.json",facts)
-            client.return_value.__enter__.return_value.call.return_value=reply(rows=[("2025-10-24",.8)])
+            client.return_value.__enter__.return_value.call.return_value=reply(rows=[("2025-10-10",.8)])
             self.assertIsNone(ensure_valuation_fx(run,required=False))
             saved=load_json(run/"facts.json")
             self.assertNotIn("valuation_fx",saved)

@@ -16,8 +16,9 @@ from pydantic_ai import Agent, RunContext
 from valuation.comein.comein import ComeinClient
 from valuation.segment_split.collect import _mcp_typed_search
 from valuation.segment_split.split_agent import _log, _log_messages
+from valuation.segment_split.split_plan import is_residual_name
 from valuation.shared.env import build_chat_model
-from valuation.shared.io import dump_json, load_json, logs_dir, spec_dir
+from valuation.shared.io import dump_json, load_json, logs_dir, safe_segment_filename, spec_dir
 
 CONTENT_TYPES = (
     "domestic_report",
@@ -118,6 +119,7 @@ class BriefDeps:
     seed_hits: list[dict[str, Any]] = field(default_factory=list)
     max_searches: int = MAX_SEARCHES
     max_reads: int = MAX_READS
+    is_residual: bool = False
     verbose: bool = True
     hits: list[dict[str, Any]] = field(default_factory=list)
     queries: list[dict[str, Any]] = field(default_factory=list)
@@ -145,6 +147,19 @@ def _brief_instructions(ctx: RunContext[BriefDeps]) -> str:
     deps = ctx.deps
     rev = "；".join(f"{year}={amount}" for year, amount in deps.notes_revenue.items()) or "无"
     others = "、".join(deps.sibling_names) or "无"
+    if deps.is_residual or deps.max_searches <= 2:
+        budget_note = (
+            f"还可检索 {deps.searches_left} 次、展开阅读 {deps.reads_left} 条命中。"
+            "本分部为残差或未单列收口项，最多检索 1-2 次确认是否有补充业务构成说明即可；若无直接材料可立即停止检索并整理已有事实。\n"
+        )
+    else:
+        budget_note = (
+            f"还可检索 {deps.searches_left} 次、展开阅读 {deps.reads_left} 条命中。"
+            "按分部信息缺口检索。若只有公司总量、还没有本分部的数值预测，"
+            "可用‘分业务收入/盈利预测表/Smart Hardware revenue’等不同词组专项补搜；"
+            "较旧的分部预测可以保留作情景参照，并用最新实际检验。"
+            "优先展开可能影响判断的原片段；确认近期实际、主要分部预测及反方材料后再停。\n"
+        )
     return (
         f"你在为{deps.label}做分部研究，资料截止日为{deps.as_of or '本次建模日'}。"
         "你的工作是多角度检索、辨别和筛选，预测数字留给下一步分析师。\n"
@@ -153,11 +168,7 @@ def _brief_instructions(ctx: RunContext[BriefDeps]) -> str:
         "每轮最多两条 search_research，不要在首轮一次发完四类查询。"
         "每次查询聚焦一个问题，变化关键词、时间和资料类型；结果重复或不对口径时及时换问法。"
         "可以查盈利预测表里的分部出货和单价，也要留意最新季度/半年实际。\n"
-        f"还可检索 {deps.searches_left} 次、展开阅读 {deps.reads_left} 条命中。"
-        "通常需要约6-10次不同角度的检索。若只有公司总量、还没有本分部的数值预测，"
-        "至少再用‘分业务收入/盈利预测表/Smart Hardware revenue’等不同词组专项补搜；"
-        "较旧的分部预测可以保留作情景参照，并用最新实际检验。"
-        "优先展开可能影响判断的原片段；确认近期实际、主要分部预测及反方材料后再停。\n"
+        + budget_note +
         f"已锁定历史分部收入（亿元，请写进已实现）：{rev}。\n"
         f"公司还有这些分部，写到它们时说清不是「{deps.segment}」：{others}。\n"
         "筛选时优先看是否真是本分部、指标和单位是否同口径、资料日期是否仍适用。"
@@ -277,7 +288,9 @@ def run_live_brief(run_dir: Path, segment: str, *, reuse_search: bool = False) -
     calls: list[dict[str, Any]] = []
     start = _start_from_hist(hist)
     chat = build_chat_model()
-    hits_path = log_root / f"research_hits_{segment}.json"
+    safe_seg = safe_segment_filename(segment)
+    hits_path = log_root / f"research_hits_{safe_seg}.json"
+    residual = is_residual_name(segment, parent=str(notes_seg.get("parent") or ""))
     with ComeinClient() as mcp:
         deps = BriefDeps(
             company=str(facts.get("company") or ""),
@@ -289,17 +302,20 @@ def run_live_brief(run_dir: Path, segment: str, *, reuse_search: bool = False) -
             search=_mcp_typed_search(mcp, calls, log_root, start=start),
             as_of=str(facts.get("as_of") or "")[:10],
             sibling_names=_sibling_names(run_dir, segment),
+            max_searches=2 if residual else MAX_SEARCHES,
+            max_reads=2 if residual else MAX_READS,
+            is_residual=residual,
         )
         if reuse_search:
             _seed_previous_hits(deps, log_root, segment)
             _log(deps, f"[brief] 已读上次材料 {len(deps.seed_hits)} 条，仍可再搜")
         draft = run_brief(deps, model=chat)
         dump_json(hits_path, {"queries": deps.queries, "hits": deps.hits, "seed_hits": deps.seed_hits})
-    dump_json(log_root / f"research_brief_raw_{segment}.json", draft.model_dump())
+    dump_json(log_root / f"research_brief_raw_{safe_seg}.json", draft.model_dump())
     brief = _brief_payload(deps, draft)
-    dump_json(logs_dir(run_dir) / f"search_log_research_{segment}.json", calls or deps.queries)
-    dump_json(logs_dir(run_dir) / "evidence" / f"research_brief_{segment}.json", brief)
-    dump_json(spec_dir(run_dir) / f"research_brief_{segment}.json", brief)
+    dump_json(logs_dir(run_dir) / f"search_log_research_{safe_seg}.json", calls or deps.queries)
+    dump_json(logs_dir(run_dir) / "evidence" / f"research_brief_{safe_seg}.json", brief)
+    dump_json(spec_dir(run_dir) / f"research_brief_{safe_seg}.json", brief)
     return brief
 
 

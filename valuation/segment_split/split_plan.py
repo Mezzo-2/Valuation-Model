@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from valuation.segment_split.schema import SchemaError
+from valuation.segment_split.schema import SchemaError, unsupported_zero_history
 
 PLAN_CALIBERS = frozenset({"official", "drilled"})
 RESIDUAL_NAMES = frozenset({"其他", "其他业务", "其他主营业务", "其他主营"})
@@ -91,6 +91,59 @@ def has_company_residual(
     return False
 
 
+def resolve_unsupported_children(
+    segments: list[dict[str, Any]],
+    periods: list[str],
+    official_rows: list[dict[str, Any]],
+    official_parents: list[str],
+    *,
+    last_total: float = 0.0,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """删去全历史兜底零；整个父项无有效具名子项时恢复年报父项。"""
+    unresolved = [seg for seg in segments if unsupported_zero_history(seg, periods)]
+    if not unresolved:
+        return segments, []
+    parents = set(official_parents)
+    for seg in unresolved:
+        parent = str(seg.get("parent") or "")
+        if parent not in parents or seg["name"] == parent or is_residual_name(seg["name"], parent=parent):
+            raise SchemaError([f"{seg['name']} 历史全为兜底零且无法退回有效年报父项，须补齐证据"])
+    out = list(segments)
+    decisions = []
+    for parent in official_parents:
+        dropped = [seg for seg in unresolved if seg.get("parent") == parent]
+        if not dropped:
+            continue
+        amounts = {year: _official_row_amount(official_rows, year, parent) for year in periods}
+        if any(amount is None for amount in amounts.values()):
+            raise SchemaError([f"{parent} 缺少年报父项历史收入，不能撤销无依据下钻后以零补数"])
+        members = [seg for seg in out if seg.get("parent") == parent]
+        drop_names = {seg["name"] for seg in dropped}
+        supported = [seg for seg in members if seg["name"] not in drop_names
+                     and seg["name"] != parent and not is_residual_name(seg["name"], parent=parent)]
+        collapse = not supported
+        replacement = {
+            "name": parent, "parent": parent, "预测方法": "",
+            "historical_revenue": amounts,
+            "data_quality": {year: "直接披露" for year in periods},
+            "source_refs": list(dict.fromkeys(ref for seg in members for ref in seg.get("source_refs") or [])),
+            "revenue_share_latest": amounts[periods[-1]] / last_total if last_total else None,
+            "note": "[直接披露] 子项缺少历史拆分依据，恢复年报父项",
+        }
+        next_rows = []
+        inserted = False
+        for seg in out:
+            if collapse and seg.get("parent") == parent:
+                if not inserted:
+                    next_rows.append(replacement)
+                    inserted = True
+            elif seg["name"] not in drop_names:
+                next_rows.append(seg)
+        out = next_rows
+        decisions.append({"parent": parent, "removed": sorted(drop_names), "collapsed": collapse})
+    return out, decisions
+
+
 def plug_parent_residuals(
     segments: list[dict[str, Any]],
     periods: list[str],
@@ -122,17 +175,22 @@ def plug_parent_residuals(
         gaps: dict[str, float] = {}
         uncovered = False
         complete = True
+        has_official = False
         for year in years:
-            official_amt = _official_row_amount(official_rows, year, parent)
             revenues = [(seg.get("historical_revenue") or {}).get(year) for seg in named]
-            if official_amt is None or any(not isinstance(item, (int, float)) or isinstance(item, bool) for item in revenues):
+            if any(not isinstance(item, (int, float)) or isinstance(item, bool) for item in revenues):
                 complete = False
                 break
+            official_amt = _official_row_amount(official_rows, year, parent)
+            if official_amt is None:
+                gaps[year] = 0.0
+                continue
+            has_official = True
             gap = money(official_amt) - money_sum([float(item) for item in revenues])
             gaps[year] = float(gap)
             if gap != 0:
                 uncovered = True
-        if not complete:
+        if not complete or not has_official:
             continue
         for seg in members:
             name = str(seg.get("name") or "").strip()
@@ -141,7 +199,6 @@ def plug_parent_residuals(
         if not uncovered:
             continue
         name = parent_residual_name(parent)
-        drop_names.discard(name)
         if not any(str(seg.get("name") or "").strip() == name for seg in members):
             added.append(name)
         last = years[-1]
@@ -228,10 +285,14 @@ TRACE_GROUPS = (
     ("user", USER_HINTS),
 )
 CALIBER_RULES = (
-    "先照搬券商怎么拆，几家接近就合成一套；"
-    "一家已按规格拆、另一家只写高速/中低速，跟更细的那套。"
-    "每条挂回一个年报父口径。下探了就只留有名字的子项，不要预留父口径其他；"
-    "公司营业收入和父口径之间的差额进行「其他」。"
+    "先照搬近期券商怎么拆，几家接近就合成一套；"
+    "若一家拆得更细且与年报历史子项一致，优先跟更细的那套；"
+    "若将多家近似表述合并命名，在 source_terms 填入切片原文出现过的原词以便回指。"
+    "每条挂回一个年报父口径。若近期研报对某个年报父口径有下钻，结合研报与近期年报明细，"
+    "将该父口径下当前仍在延续披露的同级子业务完整列出（例如某父项由 A、B、C 三项子业务构成，不要只列 A 而漏掉同级的 B、C）；"
+    "仅在早期年份出现、近期年报和研报已合并并不再单列的旧子项不要拆出。"
+    "下探时只留具名子项，不要预留父口径其他；"
+    "公司营业收入和父口径之间的差额进「其他」。"
     "券商没拆就停在年报行。"
     "这一拍只锁名单。"
 )
@@ -244,10 +305,15 @@ BLOCKED_KEYS = (
 )
 
 
-def require_split_plan(payload: dict, *, hits: list[dict[str, Any]] | None = None) -> dict:
+def require_split_plan(
+    payload: dict,
+    *,
+    hits: list[dict[str, Any]] | None = None,
+    official_rows: list[dict[str, Any]] | None = None,
+) -> dict:
     errors = [f"拆分步不得出口 {key}" for key in BLOCKED_KEYS if key in payload]
     canonical = normalize_split_plan(payload)
-    errors.extend(validate_split_plan(canonical, hits=hits))
+    errors.extend(validate_split_plan(canonical, hits=hits, official_rows=official_rows))
     if errors:
         raise SchemaError(errors)
     return canonical
@@ -261,12 +327,14 @@ def normalize_split_plan(raw: dict) -> dict:
     for item in raw.get("segments") or []:
         if not isinstance(item, dict):
             continue
-        segs.append(
-            {
-                "name": str(item.get("name") or "").strip(),
-                "parent": str(item.get("parent") or "").strip(),
-            }
-        )
+        row: dict[str, Any] = {
+            "name": str(item.get("name") or "").strip(),
+            "parent": str(item.get("parent") or "").strip(),
+        }
+        terms = [str(t).strip() for t in (item.get("source_terms") or []) if str(t).strip()]
+        if terms:
+            row["source_terms"] = terms
+        segs.append(row)
     segs = _ensure_company_residual(
         _normalize_residual_segments(segs, official_parents),
         official_parents,
@@ -281,27 +349,43 @@ def normalize_split_plan(raw: dict) -> dict:
     }
 
 
-def validate_split_plan(payload: dict, *, hits: list[dict[str, Any]] | None = None) -> list[str]:
+def validate_split_plan(
+    payload: dict,
+    *,
+    hits: list[dict[str, Any]] | None = None,
+    official_rows: list[dict[str, Any]] | None = None,
+) -> list[str]:
     errors: list[str] = []
     if payload.get("caliber") not in PLAN_CALIBERS:
         errors.append(f"caliber 必须是 official 或 drilled，实际 {payload.get('caliber')}")
     segs = payload.get("segments") or []
-    if not segs:
-        errors.append("至少锁定一条分部")
+    if len(segs) < 2:
+        errors.append("拆分名单至少保留两个分部（含其他），历史收入回填需要至少两行")
     names = [str(seg.get("name") or "") for seg in segs]
     if names and len(names) != len(set(names)):
         errors.append("分部名称重复")
     parents = list(payload.get("official_parents") or [])
     parent_set = set(parents)
+    hist_official = {
+        str(row.get("name") or "").strip()
+        for row in (official_rows or [])
+        if isinstance(row, dict) and str(row.get("name") or "").strip() and not row.get("is_total")
+    }
+    if segs and all(
+        is_residual_name(str(seg.get("name") or ""), parent=str(seg.get("parent") or ""), official_parents=parents)
+        for seg in segs
+    ):
+        errors.append("拆分名单不能只有其他，至少保留一条具名主营业务")
     for seg in segs:
         name = str(seg.get("name") or "")
         parent = str(seg.get("parent") or "")
+        terms = [str(t).strip() for t in (seg.get("source_terms") or []) if str(t).strip()]
         residual = is_residual_name(name, parent=parent, official_parents=parents)
         if not name:
             errors.append("分部缺 name")
             continue
-        if hits is not None and not residual and name not in parent_set:
-            if not _name_mentioned(name, hits):
+        if hits is not None and not residual and name not in parent_set and name not in hist_official:
+            if not _name_mentioned(name, hits, source_terms=terms):
                 errors.append(f"{name} 切片里没有出现，不能写入拆分")
         if parent and parent_set and parent not in parent_set and name not in parent_set:
             errors.append(f"{name} parent {parent} 不在 official_parents")
@@ -315,77 +399,6 @@ def validate_split_plan(payload: dict, *, hits: list[dict[str, Any]] | None = No
     return errors
 
 
-def normalize_caliber(raw: dict) -> dict:
-    official_parents = [
-        str(name).strip() for name in (raw.get("official_parents") or []) if str(name).strip()
-    ]
-    segs = []
-    for item in raw.get("segments") or []:
-        if not isinstance(item, dict):
-            continue
-        segs.append(
-            {
-                "name": str(item.get("name") or "").strip(),
-                "parent": str(item.get("parent") or "").strip(),
-            }
-        )
-    segs = _ensure_company_residual(
-        _normalize_residual_segments(segs, official_parents),
-        official_parents,
-    )
-    return {
-        "company": raw.get("company") or "",
-        "ticker": raw.get("ticker") or "",
-        "ts": raw.get("ts") or "",
-        "caliber": raw.get("caliber") or "official",
-        "official_parents": official_parents,
-        "segments": segs,
-    }
-
-
-def validate_caliber(payload: dict, *, hits: list[dict[str, Any]] | None = None) -> list[str]:
-    errors: list[str] = []
-    if payload.get("caliber") not in PLAN_CALIBERS:
-        errors.append(f"caliber 必须是 official 或 drilled，实际 {payload.get('caliber')}")
-    segs = payload.get("segments") or []
-    if not segs:
-        errors.append("至少锁定一条分部")
-    names = [str(seg.get("name") or "") for seg in segs]
-    if names and len(names) != len(set(names)):
-        errors.append("分部名称重复")
-    parents = list(payload.get("official_parents") or [])
-    parent_set = set(parents)
-    for seg in segs:
-        name = str(seg.get("name") or "")
-        parent = str(seg.get("parent") or "")
-        residual = is_residual_name(name, parent=parent, official_parents=parents)
-        if not name:
-            errors.append("分部缺 name")
-            continue
-        if hits is not None and not residual and name not in parent_set:
-            if not _name_mentioned(name, hits):
-                errors.append(f"{name} 切片里没有出现，不能写入口径")
-        if parent and parent_set and parent not in parent_set and name not in parent_set:
-            errors.append(f"{name} parent {parent} 不在 official_parents")
-    if parents and not has_company_residual(segs, parents):
-        errors.append("缺公司级残差（其他），年报父项合计对不上营业收入时无处收口")
-    if payload.get("caliber") == "drilled" and all(
-        name in parent_set or is_residual_name(name, parent=str(seg.get("parent") or ""), official_parents=parents)
-        for name, seg in zip(names, segs)
-    ):
-        errors.append("caliber=drilled 但名单仍停在年报父口径")
-    return errors
-
-
-def require_caliber(payload: dict, *, hits: list[dict[str, Any]] | None = None) -> dict:
-    errors = [f"拆分步不得出口 {key}" for key in BLOCKED_KEYS if key in payload]
-    canonical = normalize_caliber(payload)
-    errors.extend(validate_caliber(canonical, hits=hits))
-    if errors:
-        raise SchemaError(errors)
-    return canonical
-
-
 def line_traces(name: str, hits: list[dict[str, Any]]) -> list[str]:
     """已确认口径回查时，这一行在切片里碰到过哪些痕迹。"""
     found: list[str] = []
@@ -397,13 +410,20 @@ def line_traces(name: str, hits: list[dict[str, Any]]) -> list[str]:
     return found
 
 
-def _name_mentioned(name: str, hits: list[dict[str, Any]]) -> bool:
-    needle = name.strip()
-    if not needle:
+def _name_mentioned(
+    name: str,
+    hits: list[dict[str, Any]],
+    *,
+    source_terms: list[str] | None = None,
+) -> bool:
+    candidates = [name.strip(), *(str(t).strip() for t in (source_terms or []) if str(t).strip())]
+    candidates = [c for c in candidates if c]
+    if not candidates:
         return False
     for hit in hits:
         blob = f"{hit.get('title') or ''} {hit.get('snippet') or ''}"
-        if needle in blob or needle in (hit.get("specs") or []):
+        specs = hit.get("specs") or []
+        if any(needle in blob or needle in specs for needle in candidates):
             return True
     return False
 

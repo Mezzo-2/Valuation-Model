@@ -163,8 +163,8 @@ def validate_cost(payload: dict, facts: dict) -> list[str]:
                 errors.append(f"{key}.{year} 缺数字")
                 continue
             value = float(series[year])
-            if key == "tax_rate" and not 0 <= value <= 1:
-                errors.append(f"{key}.{year} 须为 0–1 的小数，实际 {value}")
+            if key == "tax_rate" and not -0.5 <= value <= 1:
+                errors.append(f"{key}.{year} 须为 -0.5–1 的小数，实际 {value}")
             elif key == "minority" and not -1 <= value <= 1:
                 errors.append(f"{key}.{year} 须为 -1–1 的小数，实际 {value}")
             elif key == "gross_margin" and not -0.5 <= value <= 1:

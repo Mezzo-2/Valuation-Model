@@ -1,4 +1,4 @@
-"""工作簿版式：深蓝页头、浅灰蓝模块、两位小数、负数红字。"""
+"""工作簿版式：深蓝页头、浅灰蓝模块、两位小数、负数红字并使用负号。"""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 PAGE = "0E2744"
 SECTION = "2A4A70"
 GROUP = "C5D0DE"
+PARENT_GROUP = "526D8A"
 NEAR = "F4F7FB"
 HEADER = "D3DEEA"
 PALE = "EAF0F7"
@@ -61,10 +62,10 @@ SPACER_ROW_HEIGHT = 12
 
 # 单元格显示格式。NUM_FMT 只留给「合理价值区间」TEXT() 公式，保持原公式文本不变。
 NUM_FMT = "#,##0.00"
-AMT_FMT = '#,##0.00;[Red](#,##0.00);0.00;@'
-PX_FMT = "0.00;[Red](0.00);0.00;@"
-MULTIPLE_FMT = '0.00"x";[Red](0.00"x");0.00"x";@'
-PCT_FMT = "0.00%;[Red](0.00%);0.00%;@"
+AMT_FMT = '#,##0.00;[Red]-#,##0.00;0.00;@'
+PX_FMT = "0.00;[Red]-0.00;0.00;@"
+MULTIPLE_FMT = '0.00"x";[Red]-0.00"x";0.00"x";@'
+PCT_FMT = "0.00%;[Red]-0.00%;0.00%;@"
 SIGNED_PCT_FMT = "+0.00%;[Red]-0.00%;0.00%;@"
 DATE_FMT = "yyyy-mm-dd"
 
@@ -78,7 +79,7 @@ SHEET_TITLE_SUFFIX = {
     "收入预测": "收入预测",
     "运营成本预测": "运营成本预测",
     "利润表预测": "利润表预测",
-    "估值预测": "估值预测",
+    "相对估值预测": "相对估值预测",
     "历史财务数据": "财务报表",
 }
 
@@ -86,7 +87,7 @@ FIRST_SECTION_TITLE = {
     "收入预测": "收入驱动假设区",
     "运营成本预测": "成本费用假设区",
     "利润表预测": "利润表预测",
-    "估值预测": "机构一致性预期",
+    "相对估值预测": "机构一致性预期",
     "历史财务数据": "利润表（亿元）",
 }
 
@@ -94,12 +95,13 @@ _HIST_PERIOD = re.compile(r"^\d{4}(?:A|Q[1-4]A)$")
 _FCST_PERIOD = re.compile(r"^\d{4}(?:E|Q[1-4]E)$")
 _EXTERNAL_REF = re.compile(r"\[[^\]]+\]")
 
-_STRUCTURE_FILLS = {PAGE, SECTION, GROUP, NEAR, HEADER}
+_STRUCTURE_FILLS = {PAGE, SECTION, PARENT_GROUP, GROUP, NEAR, HEADER}
 
 _STYLES = {
     "page_title": {"fill": PAGE, "font": WHITE, "size": TITLE_SIZE, "bold": True, "italic": False, "name": TEXT_FONT},
     "section": {"fill": SECTION, "font": WHITE, "size": SECTION_SIZE, "bold": True, "italic": False, "name": TEXT_FONT},
     "group": {"fill": GROUP, "font": ON_SECTION, "size": BODY_SIZE, "bold": True, "italic": False, "name": TEXT_FONT},
+    "parent_group": {"fill": PARENT_GROUP, "font": WHITE, "size": BODY_SIZE, "bold": True, "italic": False, "name": TEXT_FONT},
     "col_header": {"fill": HEADER, "font": ON_SECTION, "size": BODY_SIZE, "bold": True, "italic": False, "name": TEXT_FONT},
     "col_header_hist": {"fill": NEAR, "font": ON_SECTION, "size": NUMBER_SIZE, "bold": True, "italic": False, "name": NUMBER_FONT},
     "col_header_fcst": {"fill": HEADER, "font": ON_SECTION, "size": NUMBER_SIZE, "bold": True, "italic": False, "name": NUMBER_FONT},
@@ -309,11 +311,11 @@ def write_block_header(ws: Worksheet, row: int, start: int, values: list) -> int
     return row + 1
 
 
-def write_group_row(ws: Worksheet, row: int, label: str, last_col: int, *, start_col: int = 1) -> None:
+def write_group_row(ws: Worksheet, row: int, label: str, last_col: int, *, start_col: int = 1, parent: bool = False) -> None:
     cells = [ws.cell(row=row, column=start_col, value=label)]
     for col in range(start_col + 1, last_col + 1):
         cells.append(ws.cell(row=row, column=col, value=None))
-    apply_structure_style(ws, cells, "group")
+    apply_structure_style(ws, cells, "parent_group" if parent else "group")
     cells[0].alignment = Alignment(horizontal="left", vertical="center")
     for cell in cells[1:]:
         cell.alignment = Alignment(horizontal="center", vertical="center")
@@ -432,11 +434,11 @@ def choose_number_format(label: str) -> str:
     text = label or ""
     if "涨跌" in text or text == "较现价空间":
         return SIGNED_PCT_FMT
-    if text in {"投资评级", "合理价值区间"}:
+    if text in {"投资评级", "假设状态", "合理价值区间"} or text.startswith("相对估值区间"):
         return "@"
     if "股本" in text:
         return AMT_FMT
-    if re.search(r"PE|PB", text, re.I) and "系数" not in text:
+    if re.search(r"(?<![A-Za-z])(?:PE|PB)(?![A-Za-z])", text, re.I) and "系数" not in text:
         return MULTIPLE_FMT
     if any(token in text for token in ("率", "增速", "同比", "占比", "空间")):
         return PCT_FMT

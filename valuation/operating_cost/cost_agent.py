@@ -91,34 +91,15 @@ class CostDeps:
 
 
 def _rationale_template(years: list[str]) -> str:
-    street = "\n".join(
-        (
-            f"{year}：{{机构}} {{报告日}} {{目标期}} 毛利率/费用率/税率 {{数字}}，假设是{{…}}。下一家同理。"
-            "只写对本公司这些指标有假设的机构。"
-            if i == 0
-            else f"{year}：…"
-        )
-        for i, year in enumerate(years)
-    )
-    ours = "\n".join(
-        (
-            f"{year}：毛利率 {{小数}}。销售/管理/研发 {{小数}}/{{小数}}/{{小数}}。"
-            "税率 {{小数}}。财务费用 {{亿元}}。{{怎么走到这个数}}。"
-            if i == 0
-            else f"{year}：…"
-        )
-        for i, year in enumerate(years)
-    )
+    span = "、".join(years)
     return (
         "【历史轨迹】\n"
-        "用注入的近年毛利率、三费率、税率、财务费用，只写会改预测的拐点。\n"
+        "引用已算好的近年毛利率、费用率、税率、财务费用，提炼影响未来走势的关键拐点。\n"
         "【卖方假设】\n"
-        f"{street}\n"
-        "没有材料的年份只写「年份：」，后面留空。\n"
+        f"归纳已检索机构对本公司 {span} 毛利率、费用率或税率的预测及核心依据；若未检索到具体数值則注明无直接卖方拆分。\n"
         "【我们的数】\n"
-        f"{ours}\n"
-        "卖方假设只作对照。我们的数从注入轨迹和经营机制推；没有卖方就按最近一年外推或小幅经营杠杆。"
-        "比率写小数（0.08 不是 8）。财务费用是亿元金额，历史为负也可以继续为负。"
+        f"逐年说明 {span} 合并毛利率、各项费用率、有效税率及主要非经营收支的取值与传导逻辑。"
+        "比率写小数（如 0.08），财务费用等金额采用事实文件单位。"
     )
 
 
@@ -251,7 +232,8 @@ def compile_cost(deps: CostDeps, *, model=None) -> CostDraft:
         if not last_errors:
             return draft
         _log(deps, "[cost] 不合法：" + "；".join(last_errors))
-        hint = "不合法：" + "；".join(last_errors)
+        prev_json = json.dumps(draft.model_dump(), ensure_ascii=False)
+        hint = f"上次草稿：{prev_json}\n不合法：{'；'.join(last_errors)}。请基于已有材料修正上述问题。"
     raise SchemaError(last_errors or ["写成本假设失败"])
 
 
@@ -265,18 +247,21 @@ def _cost_try_errors(deps: CostDeps, draft: CostDraft) -> list[str]:
 
 def _cost_user(deps: CostDeps, hint: str) -> str:
     from valuation.shared.markets import is_foreign, forecast_keys
+    hits_block = ""
+    if deps.hits:
+        hits_json = json.dumps(_cost_hits_view(deps.hits, deps.company, limit=15), ensure_ascii=False)
+        hits_block = f"【已检索卖方材料】\n{hits_json}\n"
     if is_foreign(deps.facts):
-        import json
         ratios, amounts = forecast_keys(deps.facts)
         return (f"预测年：{deps.forecast_periods}\n适用比率字段：{ratios}\n"
                 f"历史已有金额字段：{amounts}，金额为{deps.facts.get('unit')}。\n"
                 "比率和实际适用的收支覆盖所有预测年。其他有明确来源的金额项目可按真实含义选填"
                 "fin_exp、nonop_inc、nonop_exp、other_op、associates、preferred_dividends；非适用留空。\n"
-                "不填写独立预测股数、普通股归属扣减或税前合并调整字段。\n"
                 f"历史轨迹：{json.dumps(deps.hist_track, ensure_ascii=False)}\n"
                 f"市场与股本信息：{json.dumps(deps.facts.get('market'), ensure_ascii=False)}\n"
                 f"研发是否含在管理费用中：{deps.facts.get('rd_in_admin', False)}；是否含在SG&A中：{deps.facts.get('rd_in_sga', False)}\n"
-                f"研究材料：{deps.briefs_text}\n{hint}")
+                f"研究材料：{deps.briefs_text}\n"
+                f"{hits_block}{hint}")
     years = "、".join(deps.forecast_periods)
     ratio = "、".join(RATIO_KEYS)
     amount = "、".join(AMOUNT_KEYS)
@@ -293,6 +278,8 @@ def _cost_user(deps: CostDeps, hint: str) -> str:
     if deps.briefs_text:
         text += "【分部收入与研究笔记】作产品结构背景，合并毛利率可写组合或单位盈利：\n"
         text += deps.briefs_text + "\n"
+    if hits_block:
+        text += hits_block
     if hint:
         text += hint
     return text

@@ -1,4 +1,4 @@
-"""收入拆分 agent：先确认券商口径，再按该口径查数、把过细行并进其他。不选预测方法。"""
+"""收入拆分 agent：确认券商口径后直接锁定名单，历史金额由后续回填。"""
 
 from __future__ import annotations
 
@@ -14,14 +14,9 @@ from pydantic_ai import Agent, RunContext
 
 from valuation.segment_split.split_plan import (
     CALIBER_RULES,
-    RESIDUAL_NAMES,
     hit_traces,
     is_residual_name,
-    line_traces,
-    normalize_caliber,
     normalize_split_plan,
-    parent_residual_name,
-    require_caliber,
     require_split_plan,
 )
 from valuation.segment_split.schema import SchemaError
@@ -29,7 +24,6 @@ from valuation.segment_split.schema import SchemaError
 SearchFn = Callable[[str, bool, str], list[dict[str, Any]]]
 
 MAX_CALIBER_SEARCHES = 3
-MAX_EVIDENCE_SEARCHES = 3
 _FORECAST_HINT = re.compile(r"展望|盈利预测|利润表|损益表|我们预计")
 _PEEK_HINTS = ("分业务", "分产品", "营业收入", "营收", "亿元", "出货")
 _DISCLOSURE = (
@@ -41,24 +35,13 @@ _DISCLOSURE = (
 )
 
 
-class CaliberRow(BaseModel):
+class SegmentPick(BaseModel):
     name: str = Field(description="券商拆分表里的一行，或年报父口径本身")
     parent: str = Field(default="", description="挂回的年报父口径")
-
-
-class CaliberDraft(BaseModel):
-    """确认后的拆分口径。不含方法、不含数字。"""
-
-    caliber: Literal["official", "drilled"] = Field(
-        description="停在年报口径，还是已用券商更细口径"
+    source_terms: list[str] = Field(
+        default_factory=list,
+        description="若合并多家券商近似拆法，填入切片原文出现过的原词",
     )
-    official_parents: list[str] = Field(default_factory=list, description="年报父口径")
-    segments: list[CaliberRow] = Field(default_factory=list, description="确认后的拆分行")
-
-
-class SegmentPick(BaseModel):
-    name: str = Field(description="确认口径里留下的一行，或年报父口径本身")
-    parent: str = Field(default="", description="挂回的年报父口径")
 
 
 class SplitPlan(BaseModel):
@@ -68,7 +51,12 @@ class SplitPlan(BaseModel):
         description="停在年报口径，还是已用券商更细口径"
     )
     official_parents: list[str] = Field(default_factory=list, description="年报父口径")
-    segments: list[SegmentPick] = Field(default_factory=list, description="收口后的分部")
+    segments: list[SegmentPick] = Field(default_factory=list, description="确认后的拆分行")
+
+
+# 保留别名以兼容旧导入
+CaliberRow = SegmentPick
+CaliberDraft = SplitPlan
 
 
 class SearchTurn(BaseModel):
@@ -89,9 +77,8 @@ class SplitAgentDeps:
     official_rows: list[dict[str, Any]]
     search: SearchFn
     max_caliber_searches: int = MAX_CALIBER_SEARCHES
-    max_evidence_searches: int = MAX_EVIDENCE_SEARCHES
     verbose: bool = True
-    stage: Literal["caliber", "evidence"] = "caliber"
+    stage: Literal["caliber"] = "caliber"
     draft: CaliberDraft | None = None
     hits: list[dict[str, Any]] = field(default_factory=list)
     queries: list[dict[str, Any]] = field(default_factory=list)
@@ -103,8 +90,7 @@ class SplitAgentDeps:
 
     @property
     def searches_left(self) -> int:
-        cap = self.max_caliber_searches if self.stage == "caliber" else self.max_evidence_searches
-        return max(0, cap - len(self.stage_queries))
+        return max(0, self.max_caliber_searches - len(self.stage_queries))
 
     @property
     def label(self) -> str:
@@ -113,40 +99,16 @@ class SplitAgentDeps:
         return self.company or self.ticker
 
 
-def _leaf_names(draft: CaliberDraft | None, official: list[str]) -> list[str]:
-    if not draft:
-        return []
-    names: list[str] = []
-    seen: set[str] = set()
-    for item in draft.segments:
-        name = item.name.strip()
-        if not name or name in seen or name in official:
-            continue
-        if is_residual_name(name, parent=item.parent, official_parents=official):
-            continue
-        seen.add(name)
-        names.append(name)
-    return names
-
-
 def query_errors(query: str, deps: SplitAgentDeps) -> list[str]:
     text = str(query or "").strip()
     errors: list[str] = []
+    if not text:
+        errors.append("问句不能为空")
+        return errors
     if deps.company not in text and deps.ticker not in text:
         errors.append(f"问句须包含公司名或代码（{deps.label}）")
-    if "卖方" in text:
-        errors.append("问句写券商，不写卖方")
     if "父口径" in text:
-        errors.append("问句不要写父口径")
-    if _FORECAST_HINT.search(text):
-        errors.append("问句不要写盈利预测或利润表")
-    for year in deps.forecast_years:
-        if year and year in text:
-            errors.append(f"问句不要写入预测年 {year}")
-    if deps.stage == "evidence":
-        leaves = _leaf_names(deps.draft, deps.official_names)
-        if leaves and not any(name in text for name in leaves):
-            errors.append("问句须点已确认口径里的产品名")
+        errors.append("问句不要写内部术语「父口径」")
     return errors
 
 
@@ -160,7 +122,7 @@ def execute_search(deps: SplitAgentDeps, query: str, allow_image: bool = False) 
     _log(deps, f"[loop] 调用 searchComeinResource  {query_id}")
     hits = deps.search(query, allow_image, query_id)
     _log(deps, f"[loop] 回来 {len(hits)} 条（累计 {len(deps.hits) + len(hits)}）")
-    for i, hit in enumerate(_compact_hits(hits, limit=6, names=_rank_names(deps)), 1):
+    for i, hit in enumerate(_compact_hits(hits, limit=6), 1):
         _log(
             deps,
             f"  hit[{i}] {hit.get('date')} {hit.get('institution')} {hit.get('title')}\n"
@@ -182,7 +144,7 @@ def execute_search(deps: SplitAgentDeps, query: str, allow_image: bool = False) 
         "searches_left": deps.searches_left,
         "new_hits": len(hits),
         "total_hits": len(deps.hits),
-        "hits": _compact_hits(hits, names=_rank_names(deps)),
+        "hits": _compact_hits(hits),
     }
 
 
@@ -190,42 +152,22 @@ def _official_lines(deps: SplitAgentDeps) -> tuple[str, str, str]:
     official = "、".join(deps.official_names) or "（无官方产品名）"
     rows = "；".join(
         f"{row.get('period')} {row.get('name')} {row.get('revenue_yi')}"
-        for row in deps.official_rows[:12]
+        for row in deps.official_rows
         if not row.get("is_total")
     )
-    example = f"{deps.company}近三年券商怎么拆主营收入，分业务或分产品各块有没有收入或占比。"
+    example = f"{deps.company} 主营业务收入拆分 分产品 分业务 营业收入构成"
     return official, rows, example
-
-
-def _rank_names(deps: SplitAgentDeps) -> list[str]:
-    if deps.stage == "evidence":
-        return _leaf_names(deps.draft, deps.official_names)
-    return []
 
 
 def _caliber_search_instructions(ctx: RunContext[SplitAgentDeps]) -> str:
     deps = ctx.deps
     official, rows, example = _official_lines(deps)
     return (
-        f"你为{deps.label}写下一句检索问句，用来确认券商怎么拆，或决定停搜。\n"
+        f"你为{deps.label}写下一句检索问句，用来确认研报如何拆分主营收入，或决定停搜。\n"
         f"年报父口径只做回归，问句点公司名：{official}。往年改名不是并列分部。{rows or ''}\n"
-        f"还可检索 {deps.searches_left} 次。问句写券商，不写卖方。问句不带预测年。\n"
-        f"第一次只问券商怎么拆近三年主营收入。例如：{example}"
-        "看过 hits 后，若拆分表还不完整，用券商已经写出的行名补搜。"
-        "这一拍不查某条产品的出货够不够。"
-    )
-
-
-def _evidence_search_instructions(ctx: RunContext[SplitAgentDeps]) -> str:
-    deps = ctx.deps
-    leaves = "、".join(_leaf_names(deps.draft, deps.official_names)) or "（无更细叶子）"
-    example = f"{deps.company} {leaves} 近三年收入、出货或单价。"
-    return (
-        f"你为{deps.label}按已确认口径查数。名单已锁定，只查这些行的收入、出货或单价。\n"
-        f"已确认叶子：{leaves}。\n"
-        f"还可检索 {deps.searches_left} 次。问句写券商，点公司名和已确认产品名。问句不带预测年。\n"
-        f"例如：{example}"
-        "缺哪一行的收入或出货，就补搜那一行。"
+        f"还可检索 {deps.searches_left} 次。\n"
+        f"第一次检索公司主营业务或分产品收入拆分表。例如：{example}。"
+        "看过 hits 后，若拆分表还不完整，用研报已经写出的细分业务名补搜。"
     )
 
 
@@ -239,17 +181,6 @@ def _caliber_instructions(ctx: RunContext[SplitAgentDeps]) -> str:
     )
 
 
-def _plan_instructions(ctx: RunContext[SplitAgentDeps]) -> str:
-    deps = ctx.deps
-    official, rows, _example = _official_lines(deps)
-    leaves = "、".join(_leaf_names(deps.draft, deps.official_names)) or "（停在年报）"
-    return (
-        f"你是{deps.label}的拆分收口。口径已确认，按查数结果决定停在年报还是留下更细行。这一拍只锁名单。\n"
-        f"年报父口径：{official}。{rows or ''}\n"
-        f"已确认叶子：{leaves}。只能留下这些具名叶子。不要预留父口径其他。"
-    )
-
-
 caliber_search_agent = Agent(
     output_type=SearchTurn,
     deps_type=SplitAgentDeps,
@@ -257,25 +188,11 @@ caliber_search_agent = Agent(
     instructions=_caliber_search_instructions,
 )
 
-evidence_search_agent = Agent(
-    output_type=SearchTurn,
-    deps_type=SplitAgentDeps,
-    retries=0,
-    instructions=_evidence_search_instructions,
-)
-
 caliber_draft_agent = Agent(
     output_type=CaliberDraft,
     deps_type=SplitAgentDeps,
     retries=0,
     instructions=_caliber_instructions,
-)
-
-split_agent = Agent(
-    output_type=SplitPlan,
-    deps_type=SplitAgentDeps,
-    retries=0,
-    instructions=_plan_instructions,
 )
 
 
@@ -305,61 +222,25 @@ def _has_company_residual(rows, official: list[str]) -> bool:
     return False
 
 
-def _apply_caliber_names(output: CaliberDraft) -> CaliberDraft:
-    canon = normalize_caliber(output.model_dump())
-    output.caliber = canon["caliber"]
-    output.official_parents = list(canon["official_parents"])
-    output.segments = [CaliberRow(name=item["name"], parent=item["parent"]) for item in canon["segments"]]
-    return output
-
-
-def _apply_plan_names(output: SplitPlan) -> SplitPlan:
+def _apply_caliber_names(output: SplitPlan) -> SplitPlan:
     canon = normalize_split_plan(output.model_dump())
     output.caliber = canon["caliber"]
     output.official_parents = list(canon["official_parents"])
     output.segments = [
-        SegmentPick(name=item["name"], parent=item["parent"])
+        SegmentPick(
+            name=item["name"],
+            parent=item["parent"],
+            source_terms=list(item.get("source_terms") or []),
+        )
         for item in canon["segments"]
     ]
     return output
 
 
-def _fill_caliber(deps: SplitAgentDeps, output: CaliberDraft) -> CaliberDraft:
+def _fill_caliber(deps: SplitAgentDeps, output: SplitPlan) -> SplitPlan:
     output.official_parents = list(deps.official_names)
     parents = list(output.official_parents)
     _assign_parents(output.segments, parents)
-    by_parent: dict[str, list[CaliberRow]] = {}
-    for item in output.segments:
-        by_parent.setdefault(item.parent or item.name, []).append(item)
-
-    filled = list(output.segments)
-    drilled = set()
-    for parent in parents:
-        items = by_parent.get(parent) or []
-        children = [item for item in items if item.name != parent and not _row_is_residual(item, parents)]
-        if not children:
-            if not any(item.name == parent for item in items):
-                filled.append(CaliberRow(name=parent, parent=parent))
-            continue
-        drilled.add(parent)
-
-    kept: list[CaliberRow] = []
-    for item in filled:
-        if item.name == item.parent and item.parent in drilled:
-            continue
-        kept.append(item)
-    if not _has_company_residual(kept, parents):
-        kept.append(CaliberRow(name="其他", parent=""))
-    output.segments = kept
-    output.caliber = "drilled" if drilled else "official"
-    return _apply_caliber_names(output)
-
-
-def _fill_plan(deps: SplitAgentDeps, output: SplitPlan) -> SplitPlan:
-    output.official_parents = list(deps.official_names)
-    parents = list(output.official_parents)
-    _assign_parents(output.segments, parents)
-
     by_parent: dict[str, list[SegmentPick]] = {}
     for item in output.segments:
         by_parent.setdefault(item.parent or item.name, []).append(item)
@@ -370,12 +251,7 @@ def _fill_plan(deps: SplitAgentDeps, output: SplitPlan) -> SplitPlan:
         items = by_parent.get(parent) or []
         children = [item for item in items if item.name != parent and not _row_is_residual(item, parents)]
         if not children:
-            filled = [
-                item
-                for item in filled
-                if not (item.parent == parent and _row_is_residual(item, parents))
-            ]
-            if not any(item.name == parent and item.parent == parent for item in filled):
+            if not any(item.name == parent for item in items):
                 filled.append(SegmentPick(name=parent, parent=parent))
             continue
         drilled.add(parent)
@@ -389,66 +265,55 @@ def _fill_plan(deps: SplitAgentDeps, output: SplitPlan) -> SplitPlan:
         kept.append(SegmentPick(name="其他", parent=""))
     output.segments = kept
     output.caliber = "drilled" if drilled else "official"
-    return _apply_plan_names(output)
+    return _apply_caliber_names(output)
 
 
-def _invented_names(deps: SplitAgentDeps, names: list[str]) -> list[str]:
+def _invented_names(deps: SplitAgentDeps, rows: list[SegmentPick]) -> list[str]:
     official = list(deps.official_names)
+    hist_official = {
+        str(row.get("name") or "").strip()
+        for row in deps.official_rows
+        if str(row.get("name") or "").strip() and not row.get("is_total")
+    }
     return [
-        name
-        for name in names
-        if name
-        and not is_residual_name(name, official_parents=official)
-        and name not in official
-        and not _name_in_hits(name, deps.hits)
+        item.name
+        for item in rows
+        if item.name
+        and not is_residual_name(item.name, official_parents=official)
+        and item.name not in official
+        and item.name not in hist_official
+        and not _name_in_hits(item.name, deps.hits, source_terms=item.source_terms)
     ]
 
 
-def _caliber_errors(deps: SplitAgentDeps, output: CaliberDraft) -> list[str]:
+def _caliber_errors(deps: SplitAgentDeps, output: SplitPlan) -> list[str]:
     if not deps.stage_queries and not any(item.get("intent") == "caliber" for item in deps.queries):
         return ["还没有检索"]
-    names = [item.name for item in output.segments]
     errors: list[str] = []
-    invented = _invented_names(deps, names)
+    invented = _invented_names(deps, output.segments)
     if invented:
         errors.append("这些名称无法回指切片或官方表：" + "、".join(invented))
     try:
-        require_caliber(output.model_dump(), hits=deps.hits)
+        require_split_plan(output.model_dump(), hits=deps.hits, official_rows=deps.official_rows)
     except SchemaError as exc:
         errors.extend(exc.errors)
     return errors
 
 
-def _plan_errors(deps: SplitAgentDeps, output: SplitPlan) -> list[str]:
-    if not deps.queries:
-        return ["还没有检索"]
-    names = [item.name for item in output.segments]
-    errors: list[str] = []
-    invented = _invented_names(deps, names)
-    if invented:
-        errors.append("这些名称无法回指切片或官方表：" + "、".join(invented))
-    if deps.draft:
-        allowed = {item.name for item in deps.draft.segments} | set(RESIDUAL_NAMES) | set(deps.official_names)
-        allowed.update(parent_residual_name(name) for name in deps.official_names if name)
-        extra = [name for name in names if name not in allowed]
-        if extra:
-            errors.append("收口不得新增口径外的行：" + "、".join(extra))
-    try:
-        require_split_plan(output.model_dump(), hits=deps.hits)
-    except SchemaError as exc:
-        errors.extend(exc.errors)
-    return errors
-
-
-def _name_in_hits(name: str, hits: list[dict[str, Any]]) -> bool:
-    needle = name.strip()
-    if not needle:
+def _name_in_hits(
+    name: str,
+    hits: list[dict[str, Any]],
+    *,
+    source_terms: list[str] | None = None,
+) -> bool:
+    candidates = [name.strip(), *(str(t).strip() for t in (source_terms or []) if str(t).strip())]
+    candidates = [c for c in candidates if c]
+    if not candidates:
         return False
     for hit in hits:
         blob = f"{hit.get('title') or ''} {hit.get('snippet') or ''}"
-        if needle in blob:
-            return True
-        if needle in (hit.get("specs") or []):
+        specs = hit.get("specs") or []
+        if any(needle in blob or needle in specs for needle in candidates):
             return True
     return False
 
@@ -488,20 +353,21 @@ _LINE_INCOME = re.compile(r".{0,20}(?:业务|设备|产品|器件|板块).{0,12}
 _SPEC_SPLIT = re.compile(r".{0,8}(?:\d+(?:\.\d+)?(?:G|T)).{0,20}(?:收入|营收|出货|单价|ASP)", re.I)
 
 
-def _peek_text(text: str, width: int = 280) -> str:
+def _peek_text(text: str, width: int = 1200) -> str:
     cleaned = re.sub(r"<[^>]+>", " ", str(text or ""))
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     for token in ("分业务", "分产品"):
         at = cleaned.find(token)
         if at >= 0:
-            return cleaned[max(0, at - 24) : at - 24 + width]
+            return cleaned[max(0, at - 48) : at - 48 + width]
     match = _LINE_INCOME.search(cleaned)
     if match:
-        return cleaned[match.start() : match.start() + width]
+        start = max(0, match.start() - 48)
+        return cleaned[start : start + width]
     for token in _PEEK_HINTS:
         at = cleaned.find(token)
         if at >= 0:
-            start = max(0, at - 48)
+            start = max(0, at - 64)
             return cleaned[start : start + width]
     return cleaned[:width]
 
@@ -534,11 +400,11 @@ def _log(deps: SplitAgentDeps, text: str) -> None:
 
 
 def run_revenue_split(deps: SplitAgentDeps, *, model=None) -> SplitPlan:
-    """先确认口径，再按确认名单查数、收口。不选预测方法。"""
+    """检索并确认一次业务名单，直接写入拆分计划，不再按取数情况删行。"""
     from valuation.shared.env import build_chat_model
 
     chat = model or build_chat_model()
-    _log(deps, "[loop] 第1拍：确认券商口径")
+    _log(deps, "[loop] 确认券商口径")
     deps.stage = "caliber"
     while deps.searches_left > 0:
         turn = _run_search_turn(deps, chat)
@@ -549,20 +415,8 @@ def run_revenue_split(deps: SplitAgentDeps, *, model=None) -> SplitPlan:
     if not any(item.get("intent") == "caliber" for item in deps.queries):
         raise RuntimeError("拆分 loop 没有检索")
     deps.draft = compile_caliber(deps, model=chat)
-    _log(deps, "[loop] 已确认口径：" + "、".join(item.name for item in deps.draft.segments))
-
-    _log(deps, "[loop] 第2拍：按确认口径查数")
-    deps.stage = "evidence"
-    if _leaf_names(deps.draft, deps.official_names):
-        while deps.searches_left > 0:
-            turn = _run_search_turn(deps, chat)
-            if turn.stop:
-                _log(deps, f"[loop] 停搜：{turn.why or '查数已够'}")
-                break
-            execute_search(deps, turn.query, turn.allow_image)
-    else:
-        _log(deps, "[loop] 停在年报父口径，不再查更细产品的数")
-    return compile_split_plan(deps, model=chat)
+    _log(deps, "[loop] 已锁定口径：" + "、".join(item.name for item in deps.draft.segments))
+    return compile_split_plan(deps)
 
 
 def compile_caliber(deps: SplitAgentDeps, *, model=None) -> CaliberDraft:
@@ -583,45 +437,32 @@ def compile_caliber(deps: SplitAgentDeps, *, model=None) -> CaliberDraft:
         if not last_errors:
             return draft
         _log(deps, "[loop] 口径不合法：" + "；".join(last_errors))
-        hint = "口径不合法：" + "；".join(last_errors)
+        prev_json = json.dumps(draft.model_dump(), ensure_ascii=False)
+        hint = f"上次草稿：{prev_json}\n口径不合法：{'；'.join(last_errors)}"
     raise SchemaError(last_errors or ["写口径失败"])
 
 
-def compile_split_plan(deps: SplitAgentDeps, *, model=None) -> SplitPlan:
-    """按已确认口径和查数结果收口。不带上一轮 Responses item。"""
-    from valuation.shared.env import build_chat_model
-
-    if not deps.queries:
-        raise RuntimeError("compile_split_plan 需要已有检索")
-    chat = model or build_chat_model()
-    hint = ""
-    last_errors: list[str] = []
-    for attempt in range(1, 4):
-        user_msg = _plan_user(deps, hint)
-        _log(deps, f"[loop] 写卡 第{attempt}次新会话")
-        result = split_agent.run_sync(user_msg, deps=deps, model=chat)
-        _log_messages(deps, result.all_messages())
-        plan = _fill_plan(deps, result.output)
-        last_errors = _plan_errors(deps, plan)
-        if not last_errors:
-            return plan
-        _log(deps, "[loop] 拆分卡不合法：" + "；".join(last_errors))
-        hint = "拆分卡不合法：" + "；".join(last_errors)
-    raise SchemaError(last_errors or ["写拆分卡失败"])
+def compile_split_plan(deps: SplitAgentDeps) -> SplitPlan:
+    """已确认的口径直接成为计划，只做结构及来源校验，不再调用模型。"""
+    if deps.draft is None:
+        raise RuntimeError("compile_split_plan 需要已确认口径")
+    canonical = require_split_plan(
+        deps.draft.model_dump(), hits=deps.hits, official_rows=deps.official_rows
+    )
+    return SplitPlan.model_validate(canonical)
 
 
 def _run_search_turn(deps: SplitAgentDeps, model) -> SearchTurn:
-    agent = caliber_search_agent if deps.stage == "caliber" else evidence_search_agent
     hint = ""
     last_errors: list[str] = []
     for attempt in range(1, 4):
         user_msg = _search_turn_user(deps, hint)
         _log(deps, f"[loop] 写问句  {deps.stage} 第{len(deps.stage_queries) + 1}拍 尝试{attempt}")
-        result = agent.run_sync(user_msg, deps=deps, model=model)
+        result = caliber_search_agent.run_sync(user_msg, deps=deps, model=model)
         _log_messages(deps, result.all_messages())
         turn = result.output
         if turn.stop:
-            if deps.stage_queries or (deps.stage == "evidence" and deps.draft):
+            if deps.stage_queries:
                 return turn
             last_errors = ["还没有检索，不能停"]
             hint = last_errors[0] + "。先写一条问句。"
@@ -637,17 +478,13 @@ def _run_search_turn(deps: SplitAgentDeps, model) -> SearchTurn:
 
 def _search_turn_user(deps: SplitAgentDeps, hint: str) -> str:
     asked = "；".join(item.get("query") or "" for item in deps.stage_queries) or "还没有检索"
-    hits = json.dumps(_compact_hits(deps.hits, limit=10, names=_rank_names(deps)), ensure_ascii=False)
+    hits = json.dumps(_compact_hits(deps.hits, limit=10), ensure_ascii=False)
     text = (
         f"已问过：{asked}\n"
         f"还可检索 {deps.searches_left} 次。\n"
         f"hits={hits}\n"
     )
-    if deps.stage == "caliber":
-        text += "先写一条问券商怎么拆主营收入的中文问句。" if not deps.stage_queries else "要补搜就写下一句；够了就把 stop 设为 true。"
-    else:
-        leaves = "、".join(_leaf_names(deps.draft, deps.official_names))
-        text += f"已确认口径：{leaves}。按这些名字查收入、出货或单价；够了就把 stop 设为 true。"
+    text += "先写一条问券商怎么拆主营收入的中文问句。" if not deps.stage_queries else "要补搜就写下一句；够了就把 stop 设为 true。"
     if hint:
         text += "\n" + hint
     return text
@@ -655,33 +492,13 @@ def _search_turn_user(deps: SplitAgentDeps, hint: str) -> str:
 
 def _caliber_user(deps: SplitAgentDeps, hint: str) -> str:
     hits = json.dumps(_compact_hits(deps.hits, limit=18), ensure_ascii=False)
+    _official, rows, _example = _official_lines(deps)
     text = (
         "检索已完成。照搬切片里的券商拆法，同意的合并，再挂回年报父口径。这一拍只锁名单。\n"
-        f"年报父口径（回归用）：{'、'.join(deps.official_names) or '无'}\n"
+        f"最新年报父口径（回归用）：{'、'.join(deps.official_names) or '无'}\n"
+        f"近三年年报主营构成明细：{rows or '无'}\n"
         f"hits={hits}\n"
     )
-    if hint:
-        text += hint
-    return text
-
-
-def _plan_user(deps: SplitAgentDeps, hint: str) -> str:
-    hits = json.dumps(
-        _compact_hits(deps.hits, limit=18, names=_leaf_names(deps.draft, deps.official_names)),
-        ensure_ascii=False,
-    )
-    traces = []
-    for name in _leaf_names(deps.draft, deps.official_names):
-        found = line_traces(name, deps.hits)
-        traces.append(f"{name}：{'、'.join(found) or '几乎没有可跟的数'}")
-    text = (
-        "口径已确认。过细、几乎没有可跟的数的行不要单列，也不要预留父口径其他。公司级差额留在「其他」。这一拍只锁名单。\n"
-        f"年报父口径（回归用）：{'、'.join(deps.official_names) or '无'}\n"
-        f"已确认口径：{'、'.join(item.name for item in (deps.draft.segments if deps.draft else [])) or '无'}\n"
-    )
-    if traces:
-        text += "各行痕迹：" + "；".join(traces) + "。\n"
-    text += f"hits={hits}\n"
     if hint:
         text += hint
     return text
@@ -720,9 +537,6 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     print(describe())
     pack = run_split_smoke(args.name, args.ticker, out_dir=Path(args.out_dir) if args.out_dir else None)
-    draft = pack.get("split_caliber") or {}
-    if draft:
-        print("caliber_draft=" + "、".join(item.get("name") or "" for item in draft.get("segments") or []))
     plan = pack.get("split_plan") or {}
     print(f"caliber={plan.get('caliber')}")
     for item in plan.get("segments") or []:

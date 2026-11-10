@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 from typing import Any
+import math
 
 from valuation.peer_valuation.fetch import _norm_ticker
 from valuation.segment_split.schema import SchemaError
+from valuation.peer_valuation.judgment import model_pe_errors, uses_model_pe
 
 CORE_MIN = 4
 
 
-def require_comps(payload: dict, facts: dict, filled: list[dict] | None = None) -> dict:
+def require_comps(payload: dict, facts: dict, filled: list[dict] | None = None, *, require_model_pe: bool = False) -> dict:
     canonical = normalize_comps(payload, facts, filled)
-    errors = validate_comps(canonical)
+    errors = validate_comps(canonical, require_model_pe=require_model_pe)
     from valuation.shared.markets import validate_pe_basis
     try:
         validate_pe_basis(facts, canonical)
@@ -35,7 +37,7 @@ def normalize_comps(raw: dict, facts: dict, filled: list[dict] | None = None) ->
         pe_adjust = 1.0 if adjust is None or adjust == "" else float(adjust)
     except (TypeError, ValueError):
         pe_adjust = adjust
-    return {
+    canonical = {
         "ts": raw.get("ts") or facts.get("as_of") or "",
         "core": [item for item in core if item.get("name")],
         "pe_adjust": pe_adjust,
@@ -46,10 +48,15 @@ def normalize_comps(raw: dict, facts: dict, filled: list[dict] | None = None) ->
             if str(item).strip()
         ],
     }
+    if uses_model_pe(raw):
+        canonical.update(schema_version=2, model_pe=raw.get("model_pe"),
+                         model_pe_reason=raw.get("model_pe_reason"),
+                         model_pe_sources=raw.get("model_pe_sources") or [])
+    return canonical
 
 
-def validate_comps(payload: dict) -> list[str]:
-    errors: list[str] = []
+def validate_comps(payload: dict, *, require_model_pe: bool = False) -> list[str]:
+    errors = model_pe_errors(payload, required=require_model_pe)
     core = payload.get("core") or []
     if len(core) < CORE_MIN:
         errors.append(f"核心同业池至少 {CORE_MIN} 家，实际 {len(core)}")
@@ -116,7 +123,7 @@ def _is_number(value: Any) -> bool:
     if isinstance(value, bool) or value is None:
         return False
     try:
-        float(value)
+        number = float(value)
     except (TypeError, ValueError):
         return False
-    return True
+    return math.isfinite(number)

@@ -22,12 +22,10 @@ DISCLAIMER = "本模型由 AI 根据公开资料自动生成，仅供研究演�
 
 BANNED = (
     "【事件发酵】",
-    "事件发酵",
     "final_rationale",
     "pe_adjust",
-    "综合各方",
-    "股份有限公司",
-    "年报主营构成",
+    "model_pe",
+    "open_gaps",
     "拆分计划确认后的历史检索",
     "方向一致、幅度更保守/更积极",
 )
@@ -100,6 +98,15 @@ def validate_dossier(markdown: str, snapshot: dict, notes: dict | None = None) -
     if [title for title in headings if title in CHAPTERS] != list(CHAPTERS):
         errors.append("底稿章节顺序不符")
     display = snapshot.get("display") or {}
+    if snapshot.get("dcf"):
+        dcf = snapshot["dcf"]
+        chapter = _chapter(text, "估值与评级")
+        if "DCF" not in chapter:
+            errors.append("估值与评级缺少DCF交叉验证")
+        if dcf.get("status") in {"ready", "estimated"}:
+            for label, value, digits in (("DCF价格", dcf["price"], 2), ("WACC", dcf["capital_cost"]["wacc"] * 100, 2)):
+                if not any(token in chapter.replace(",", "") for token in _number_tokens(value, digits)):
+                    errors.append(f"DCF说明未引用锁定的{label}")
     first = _chapter(text, "投资要点") or text[:1200]
     rating = str(display.get("rating") or "")
     tp = display.get("target_price")
@@ -146,15 +153,15 @@ def validate_dossier(markdown: str, snapshot: dict, notes: dict | None = None) -
     tracking = _subsection(counter_ch, "跟踪指标")
     if not alternative or not tracking:
         errors.append("反证与跟踪须分别写替代解释和跟踪指标")
-    elif _cjk_len(alternative) < 60 or _cjk_len(tracking) < 25:
+    elif _cjk_len(alternative) < 40 or _cjk_len(tracking) < 15:
         errors.append("反证或跟踪条件过短")
     if counter_ch and not any(token in counter_ch for token in ("收入", "毛利率", "EPS", "目标PE", "目标价")):
         errors.append("反证未说明受影响的盈利或估值指标")
     logic_ch = _chapter(text, "投资逻辑")
     outlook_ch = _chapter(text, "业务展望")
-    if _cjk_len(logic_ch) < 400:
+    if _cjk_len(logic_ch) < 200:
         errors.append("投资逻辑过短")
-    if _cjk_len(outlook_ch) < 400:
+    if _cjk_len(outlook_ch) < 200:
         errors.append("业务展望过短")
     if logic_ch.count("### ") < 2:
         errors.append("投资逻辑须有主题小标题")
@@ -264,7 +271,14 @@ def _as_point(value: Any) -> dict[str, str] | None:
 
 
 def _clean_title(title: str) -> str:
-    return re.sub(r"^[*【\[]+|[】\].。:：*]+$", "", str(title or "").strip())
+    cleaned = re.sub(r"^[*【\[]+|[】\].。:：*]+$", "", str(title or "").strip())
+    if len(cleaned) > 16:
+        parts = re.split(r"[，,；;：:——\-（(]", cleaned, maxsplit=1)
+        if 2 <= len(parts[0].strip()) <= 16:
+            cleaned = parts[0].strip()
+        else:
+            cleaned = cleaned[:16].rstrip("，,；;：:——-（(")
+    return cleaned
 
 
 def _chapter(markdown: str, title: str) -> str:

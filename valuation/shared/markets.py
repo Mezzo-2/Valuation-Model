@@ -65,12 +65,17 @@ def register_labels(wb, facts: dict) -> None:
 
 
 def validate_pe_basis(facts: dict, comps: dict) -> None:
-    if not is_foreign(facts):
-        return
     core = comps.get("core") or []
+    periods = facts.get("forecast_periods") or []
+    year = str(periods[0]) if periods else ""
+    if not is_foreign(facts):
+        if year:
+            for item in core:
+                if item.get("forecast_period") and str(item["forecast_period"]) not in {year, year[:4]}:
+                    raise ValueError(f"{item.get('name')} 同业PE的预测财年与本公司明确不一致")
+        return
     if not core:
         raise ValueError("没有可比盈利口径的同业PE")
-    year = facts["forecast_periods"][0]
     if not facts.get("eps_scope"):
         raise ValueError("本公司基本EPS口径未确认")
     for item in core:

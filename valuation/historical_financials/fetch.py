@@ -399,6 +399,12 @@ def _require_income(
         if op is not None and fin is not None:
             notes.setdefault(label, "由营业利润 + 财务费用近似")
             return round(op + fin, 6)
+    if label == "少数股东损益":
+        net = _lookup(fields, "净利润")
+        parent = _lookup(fields, "归母净利润")
+        if net is not None and parent is not None:
+            notes.setdefault(label, "由净利润 − 归母净利润派生")
+            return round(net - parent, 6)
     raise SystemExit(f"{year}A 缺少核心科目 {label}")
 
 

@@ -7,6 +7,8 @@ from statistics import median
 from typing import Any
 
 from valuation.segment_research.methods import roll_segment
+from valuation.shared.operating import _pnl_roll
+from valuation.peer_valuation.judgment import resolve_model_pe
 from valuation.shared.houses import (
     bibliography as build_bibliography,
     is_broker_source,
@@ -90,6 +92,9 @@ def snapshot_from_spec(spec: dict, *, run_dir: Path | None = None) -> dict[str, 
         "sources": _collect_sources(spec, run_dir),
     }
     snap["bibliography"] = _bibliography(snap, run_dir=run_dir)
+    if spec.get("dcf") and spec["dcf"].get("status") != "disabled":
+        snap["dcf"] = spec["dcf"]
+        snap["dcf_inputs"] = spec.get("dcf_inputs") or {}
     if is_foreign(facts):
         snap.update(currency=facts.get("currency"), trading_currency=facts.get("trading_currency"),
                     amount_unit=facts.get("unit"), eps_unit=facts.get("eps_unit"), eps_scope=facts.get("eps_scope"))
@@ -150,109 +155,6 @@ def _hist_rev_map(seg: dict, forecast: dict, hist: list[str]) -> dict[str, float
     return out
 
 
-def _pnl_roll(
-    facts: dict,
-    cost: dict,
-    revenue: dict[str, float],
-    hist: list[str],
-    fcst: list[str],
-) -> dict[str, dict[str, float | None]]:
-    if is_foreign(facts):
-        return foreign_pnl(facts, cost, revenue)
-    income = facts.get("income") or {}
-    shares = float((facts.get("market") or {})["当前总股本_百万股"])
-    out: dict[str, dict[str, float | None]] = {}
-    periods = hist + fcst
-    for i, year in enumerate(hist):
-        rev = _income_at(income, "营业收入", i)
-        gp = _income_at(income, "毛利", i)
-        if gp is None and rev is not None:
-            cogs = _income_at(income, "营业成本", i)
-            if cogs is not None:
-                gp = rev - cogs
-        sales = _income_at(income, "销售费用", i)
-        admin = _income_at(income, "管理费用", i)
-        rd = _income_at(income, "研发费用", i)
-        ebit = _income_at(income, "息税前利润", i)
-        ni = _income_at(income, "归母净利润", i)
-        eps = _income_at(income, "EPS", i)
-        tax = _income_at(income, "所得税费用", i)
-        pre = _income_at(income, "税前利润", i)
-        row = {
-            "revenue": rev,
-            "gp": gp,
-            "gm": None if not rev else (gp or 0) / rev,
-            "sales": sales,
-            "admin": admin,
-            "rd": rd,
-            "sales_ratio": None if not rev else (sales or 0) / rev,
-            "admin_ratio": None if not rev else (admin or 0) / rev,
-            "rd_ratio": None if not rev else (rd or 0) / rev,
-            "ebit": ebit,
-            "ebit_margin": None if not rev else (ebit or 0) / rev,
-            "ni": ni,
-            "ni_margin": None if not rev else (ni or 0) / rev,
-            "eps": eps,
-            "tax_rate": None if not pre else (tax or 0) / pre,
-            "rev_yoy": None,
-        }
-        if i:
-            prev = _income_at(income, "营业收入", i - 1)
-            if prev:
-                row["rev_yoy"] = rev / prev - 1
-        out[year] = row
-    for year in fcst:
-        rev = revenue[year]
-        gm = float(cost["gross_margin"][year])
-        sr = float(cost["sales_ratio"][year])
-        ar = float(cost["admin_ratio"][year])
-        dr = float(cost["rd_ratio"][year])
-        tax_rate = float(cost["tax_rate"][year])
-        fin = float(cost["fin_exp"][year])
-        nonop_inc = float(cost["nonop_inc"][year])
-        nonop_exp = float(cost["nonop_exp"][year])
-        minority = float((cost.get("minority") or {}).get(year) or 0.0)
-        other_op = float((cost.get("other_op") or {}).get(year) or 0.0)
-        gp = rev * gm
-        sales = rev * sr
-        admin = rev * ar
-        rd = rev * dr
-        ebit = gp - sales - admin - rd + other_op
-        pre = ebit - fin + nonop_inc - nonop_exp
-        tax = pre * tax_rate
-        mino = (pre - tax) * minority
-        ni = pre - tax - mino
-        eps = ni * 100 / shares
-        out[year] = {
-            "revenue": rev,
-            "gp": gp,
-            "gm": gm,
-            "sales": sales,
-            "admin": admin,
-            "rd": rd,
-            "sales_ratio": sr,
-            "admin_ratio": ar,
-            "rd_ratio": dr,
-            "ebit": ebit,
-            "ebit_margin": ebit / rev if rev else None,
-            "ni": ni,
-            "ni_margin": ni / rev if rev else None,
-            "eps": eps,
-            "tax_rate": tax_rate,
-            "fin": fin,
-            "other_op": other_op,
-            "rev_yoy": None,
-        }
-    for i, year in enumerate(periods):
-        if i == 0:
-            continue
-        prev = periods[i - 1]
-        cur = out[year]["revenue"]
-        pri = out[prev]["revenue"]
-        if cur is not None and pri:
-            out[year]["rev_yoy"] = cur / pri - 1
-    return out
-
 
 def _valuation_block(facts: dict, comps: dict, eps_y1: float, y1: str) -> dict[str, Any]:
     validate_pe_basis(facts, comps)
@@ -260,7 +162,8 @@ def _valuation_block(facts: dict, comps: dict, eps_y1: float, y1: str) -> dict[s
     pes = [float(item["pe_y1"]) for item in core]
     pe_mean = sum(pes) / len(pes)
     pe_adjust = float(comps.get("pe_adjust") if comps.get("pe_adjust") is not None else 1.0)
-    target_pe = pe_mean * pe_adjust
+    pe_base, model_pe_reason, independent = resolve_model_pe(comps)
+    target_pe = pe_base * pe_adjust
     factor = valuation_factor(facts)
     target_price = target_pe * float(eps_y1) * factor
     price = float((facts.get("market") or {})["当前股价"])
@@ -280,6 +183,11 @@ def _valuation_block(facts: dict, comps: dict, eps_y1: float, y1: str) -> dict[s
             for item in core
         ],
         "pe_mean": pe_mean,
+        "pe_base": pe_base,
+        "model_pe": pe_base if independent else None,
+        "model_pe_reason": model_pe_reason,
+        "model_pe_sources": comps.get("model_pe_sources") or [],
+        "pe_basis_source": "model" if independent else "legacy_mean",
         "pe_adjust": pe_adjust,
         "target_pe": target_pe,
         "eps_y1": float(eps_y1),
@@ -416,6 +324,8 @@ def _display(
         "target_price": _r2(valuation["target_price"]),
         "target_pe": _r1(valuation["target_pe"]),
         "pe_mean": _r1(valuation["pe_mean"]),
+        "pe_base": _r1(valuation["pe_base"]),
+        "model_pe": _r1(valuation["model_pe"]) if valuation["model_pe"] is not None else None,
         "eps_y1": _r2(valuation["eps_y1"]),
         "price": _r2(valuation["price"]),
         "upside_pct": _r1(valuation["upside"] * 100),

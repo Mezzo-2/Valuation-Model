@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from valuation.segment_research.schema import SchemaError, require_forecast
-from valuation.shared.io import dump_json, load_json, spec_dir
+from valuation.shared.io import dump_json, load_json, safe_segment_filename, spec_dir
 
 
 def gather_forecasts(run_dir: Path) -> dict:
@@ -20,7 +20,10 @@ def gather_forecasts(run_dir: Path) -> dict:
         name = str(seg.get("name") or "").strip()
         if not name:
             continue
-        path = root / f"forecast_notes_{name}.json"
+        path = root / f"forecast_notes_{safe_segment_filename(name)}.json"
+        if not path.is_file():
+            alt = root / f"forecast_notes_{name}.json"
+            path = alt if alt.is_file() else path
         if not path.is_file():
             missing.append(name)
             continue

@@ -104,13 +104,15 @@ def foreign_pnl_formulas(facts, cost, ref, assume, revenue, build, shares):
             "EPS": f"({ref('归母净利润')}"+terms("common", lambda key, name: ref(name))+f")*100/({shares})"}
 
 
-def pnl_note(facts):
+def pnl_notes(facts):
     if is_foreign(facts):
-        return ("历史列沿用披露值；预测按适用费用和有依据的经营项目推导营业利润，再计算税前利润、净利润和归母净利润。"
-                "预测EPS沿用财务快照股本，假设股本持平；ADS先按已核实比例换成普通股数；其中项费用不重复扣减。")
-    return ("历史列沿用历史财务数据口径。预测列：息税前利润＝毛利－销售费用－管理费用－研发费用＋其他经营净收益；"
-            "税前利润＝息税前利润－财务费用＋营业外收入－营业外支出。"
-            "历史披露或接口的息税前利润口径可能与上述模型定义不同。")
+        return {"税前利润": (
+            "历史列沿用披露值；预测按适用费用和有依据的经营项目推导营业利润，再计算税前利润、净利润和归母净利润。"
+            "预测EPS沿用财务快照股本，假设股本持平；ADS先按已核实比例换成普通股数；其中项费用不重复扣减。")}
+    return {
+        "息税前利润": "息税前利润＝毛利－销售费用－管理费用－研发费用＋其他经营净收益",
+        "税前利润": "税前利润＝息税前利润－财务费用＋营业外收入－营业外支出",
+    }
 
 
 def assumption_history_formula(facts, key, numerator, denominator, ref):

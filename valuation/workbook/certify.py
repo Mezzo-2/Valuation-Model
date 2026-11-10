@@ -21,7 +21,7 @@ from valuation.workbook.anchors import (
     verify_formula_anchors,
 )
 from valuation.workbook.build import consensus_median_formula
-from valuation.workbook.build import SHEET_ORDER
+from valuation.workbook.build import SHEET_ORDER, sheet_order, RELATIVE_TARGET_LABEL, summary_overview_labels
 from valuation.workbook.load_json import load_spec
 from valuation.shared.markets import is_foreign, register_labels
 from valuation.workbook.tree import (
@@ -57,17 +57,23 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
     format_fails: list[str] = []
     fails = calc_fails
     titles = [ws.title for ws in wb.worksheets]
-    if titles != SHEET_ORDER:
-        format_fails.append(f"tab 顺序 {titles} != {SHEET_ORDER}")
+    expected_order = sheet_order(spec)
+    if titles != expected_order:
+        format_fails.append(f"tab 顺序 {titles} != {expected_order}")
 
-    for name in SHEET_ORDER:
+    for name in expected_order:
         if name not in wb.sheetnames:
             format_fails.append(f"缺 sheet {name}")
 
     rev = wb["收入预测"]
+    y1 = spec["facts"]["forecast_periods"][0]
+    try:
+        y1_col = find_col_by_header(rev, y1)
+    except ValueError:
+        y1_col = 5
     try:
         r = find_row_by_label(rev, "营业收入")
-        sample = rev.cell(row=r, column=5).value
+        sample = rev.cell(row=r, column=y1_col).value
         if not (isinstance(sample, str) and sample.startswith("=")):
             fails.append("收入预测!营业收入 预测列不是公式")
     except ValueError as exc:
@@ -96,7 +102,7 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
         except ValueError as exc:
             fails.append(str(exc))
             continue
-        formula = str(rev.cell(row=r, column=5).value or "")
+        formula = str(rev.cell(row=r, column=y1_col).value or "")
         for item in formula_errors(seg["method"], formula):
             fails.append(f"{label} {item}")
         if method_spec(seg["method"]).needs_fx:
@@ -121,7 +127,7 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
         except ValueError as exc:
             fails.append(str(exc))
             continue
-        formula = str(rev.cell(row=r, column=5).value or "")
+        formula = str(rev.cell(row=r, column=y1_col).value or "")
         if "(1+" in formula.replace(" ", ""):
             fails.append(f"{label} 应是子项加总，不能是增速外推: {formula}")
         ref_groups = {
@@ -135,7 +141,7 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
                 fails.append(f"{label} 未引用 {child['name']}")
     try:
         r = find_row_by_label(rev, "营业收入")
-        formula = str(rev.cell(row=r, column=5).value or "")
+        formula = str(rev.cell(row=r, column=y1_col).value or "")
         ref_groups = {
             group_title_above(rev, row, group_titles)
             for row, lab in formula_ref_rows(rev, formula)
@@ -165,26 +171,27 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
     except ValueError as exc:
         fails.append(str(exc))
 
-    val = wb["估值预测"]
-    for label in ("目标PE", "中枢目标价", "较现价空间", "投资评级"):
+    val = wb["相对估值预测"]
+    for label in ("目标PE", RELATIVE_TARGET_LABEL, "较现价空间", "投资评级"):
         try:
             r = find_row_by_label(val, label)
             cell = val.cell(row=r, column=2).value
             if not (isinstance(cell, str) and str(cell).startswith("=")):
-                fails.append(f"估值预测!{label} 不是公式")
+                fails.append(f"相对估值预测!{label} 不是公式")
         except ValueError as exc:
             fails.append(str(exc))
 
     sm = wb["总结"]
+    overview_names = summary_overview_labels(spec["facts"])
     overview_labels = (
         "目标PE",
-        "合理价值区间",
-        "中枢目标价",
+        overview_names["range"],
+        overview_names["target"],
         "较现价空间",
         "投资评级",
-        "当前股价",
-        "EPS_最近实际",
-        "EPS_预测首年",
+        overview_names["price"],
+        overview_names["actual_eps"],
+        overview_names["forecast_eps"],
     )
     for label in overview_labels:
         try:
@@ -272,7 +279,10 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
     calc_fails.extend(hist_recon_errors(spec["facts"], spec["split"]["final_segments"]))
     calc_fails.extend(_pnl_year_errors(wb, spec))
     calc_fails.extend(_consensus_median_errors(wb, spec))
+    calc_fails.extend(_relative_valuation_errors(wb, spec))
     calc_fails.extend(_snapshot_replay_errors(spec))
+    from valuation.dcf.certify import certify_dcf
+    calc_fails.extend(certify_dcf(wb, spec))
 
     pes = [float(c["pe_y1"]) for c in spec["comps"]["core"]]
     report = {
@@ -281,10 +291,43 @@ def certify_workbook(run_dir: Path, workbook_path: Path) -> dict:
         "calc_fails": calc_fails,
         "format_fails": format_fails,
         "core_pe_mean": sum(pes) / len(pes) if pes else None,
+        "model_pe": spec["comps"].get("model_pe"),
         "workbook": str(workbook_path),
         "data_warnings": spec["facts"].get("notes", {}).get("profit_checks", []),
     }
     return report
+
+
+def _relative_valuation_errors(wb, spec: dict) -> list[str]:
+    from valuation.peer_valuation.judgment import resolve_model_pe
+
+    fails = []
+    ws = wb["相对估值预测"]
+    try:
+        pe, reason, independent = resolve_model_pe(spec["comps"])
+        row = find_row_by_label(ws, "模型给定PE")
+        cell = ws.cell(row, 2)
+        if independent:
+            if isinstance(cell.value, bool) or not isinstance(cell.value, (int, float)) or not math.isclose(cell.value, pe):
+                fails.append("模型给定PE与落盘判断不一致")
+        elif cell.value != f"=B{find_row_by_label(ws, '核心池均值')}":
+            fails.append("历史任务的模型给定PE行未链接核心池均值")
+        if ws.cell(row, 3).value != reason:
+            fails.append("模型给定PE的简要说明与落盘判断不一致")
+        neutral = find_row_by_label(ws, "中性")
+        if ws.cell(neutral, 2).value != spec["comps"]["pe_adjust"]:
+            fails.append("中性PE调整系数与落盘假设不一致")
+        for scenario in ("悲观", "中性", "乐观"):
+            r = find_row_by_label(ws, scenario)
+            if ws.cell(r, 3).value != f"=B{r}*$B${row}":
+                fails.append(f"{scenario}目标PE未引用模型给定PE")
+        if ws.cell(find_row_by_label(ws, "悲观"), 2).value != f"=B{neutral}*0.85":
+            fails.append("悲观PE系数未沿用中性系数的0.85倍")
+        if ws.cell(find_row_by_label(ws, "乐观"), 2).value != f"=B{neutral}*1.15":
+            fails.append("乐观PE系数未沿用中性系数的1.15倍")
+    except (KeyError, ValueError) as exc:
+        fails.append(f"相对估值判断校验失败: {exc}")
+    return fails
 
 
 def _summary_adjacent_value(ws: Worksheet, label: str):
@@ -361,7 +404,7 @@ def _pnl_year_errors(wb, spec: dict) -> list[str]:
 
 def _consensus_median_errors(wb, spec: dict) -> list[str]:
     fails: list[str] = []
-    val = wb["估值预测"]
+    val = wb["相对估值预测"]
     try:
         row = find_row_by_label(val, "一致预期_中位数")
     except ValueError as exc:
@@ -372,10 +415,10 @@ def _consensus_median_errors(wb, spec: dict) -> list[str]:
         text = str(cell.value or "")
         if not institutions:
             if text.upper().startswith("=MEDIAN") or median_range_is_empty(text):
-                fails.append(f"估值预测一致预期中位数在无机构时不应写 MEDIAN: {text}")
+                fails.append(f"相对估值预测一致预期中位数在无机构时不应写 MEDIAN: {text}")
             continue
         if median_range_is_empty(text):
-            fails.append(f"估值预测一致预期中位数区间为空: {text}")
+            fails.append(f"相对估值预测一致预期中位数区间为空: {text}")
         expected = consensus_median_formula(3, 2 + len(institutions), chr(ord("C") + i))
         _ = expected
     return fails

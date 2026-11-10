@@ -14,7 +14,7 @@ from valuation.segment_split.hist_agent import (
     hist_errors,
     plan_slot_errors,
 )
-from valuation.segment_split.split_agent import SegmentPick, SplitAgentDeps, SplitPlan, _fill_plan
+from valuation.segment_split.split_agent import CaliberDraft, CaliberRow, SplitAgentDeps, _fill_caliber
 from valuation.segment_split.schema import t_recon
 from valuation.segment_split.split_plan import (
     is_residual_name,
@@ -63,15 +63,15 @@ class ResidualNameTests(unittest.TestCase):
             official_rows=[],
             search=lambda *_a, **_k: [],
         )
-        plan = SplitPlan(
+        plan = CaliberDraft(
             caliber="drilled",
             official_parents=["集成电路晶圆制造代工"],
             segments=[
-                SegmentPick(name="智能手机", parent="集成电路晶圆制造代工"),
-                SegmentPick(name="消费电子", parent="集成电路晶圆制造代工"),
+                CaliberRow(name="智能手机", parent="集成电路晶圆制造代工"),
+                CaliberRow(name="消费电子", parent="集成电路晶圆制造代工"),
             ],
         )
-        filled = _fill_plan(deps, plan)
+        filled = _fill_caliber(deps, plan)
         names = [item.name for item in filled.segments]
         self.assertEqual(names, ["智能手机", "消费电子", "其他"])
 
@@ -174,17 +174,17 @@ class ResidualNameTests(unittest.TestCase):
             official_rows=[],
             search=lambda *_a, **_k: [],
         )
-        plan = SplitPlan(
+        plan = CaliberDraft(
             caliber="drilled",
             official_parents=["3C电子产品"],
             segments=[
-                SegmentPick(name="云计算", parent="3C电子产品"),
-                SegmentPick(name="通信及移动网络设备", parent="3C电子产品"),
-                SegmentPick(name="3C电子产品其他", parent="3C电子产品"),
-                SegmentPick(name="其他", parent=""),
+                CaliberRow(name="云计算", parent="3C电子产品"),
+                CaliberRow(name="通信及移动网络设备", parent="3C电子产品"),
+                CaliberRow(name="3C电子产品其他", parent="3C电子产品"),
+                CaliberRow(name="其他", parent=""),
             ],
         )
-        filled = _fill_plan(deps, plan)
+        filled = _fill_caliber(deps, plan)
         names = [item.name for item in filled.segments]
         self.assertEqual(len(names), len(set(names)))
         other = next(item for item in filled.segments if item.name == "其他")
@@ -201,15 +201,15 @@ class ResidualNameTests(unittest.TestCase):
             official_rows=[],
             search=lambda *_a, **_k: [],
         )
-        plan = SplitPlan(
+        plan = CaliberDraft(
             caliber="official",
             official_parents=["动力电池系统", "储能电池系统"],
             segments=[
-                SegmentPick(name="动力电池系统", parent="动力电池系统"),
-                SegmentPick(name="储能电池系统", parent="储能电池系统"),
+                CaliberRow(name="动力电池系统", parent="动力电池系统"),
+                CaliberRow(name="储能电池系统", parent="储能电池系统"),
             ],
         )
-        filled = _fill_plan(deps, plan)
+        filled = _fill_caliber(deps, plan)
         names = [item.name for item in filled.segments]
         self.assertIn("其他", names)
         other = next(item for item in filled.segments if item.name == "其他")
@@ -404,6 +404,41 @@ class HistFillContractTests(unittest.TestCase):
         almost = hist_errors(deps, _hist_draft({"智能手机": 99.95, "其他": 10.05}))
         self.assertTrue(any("对不上" in item for item in almost))
         self.assertFalse(any("容差" in item for item in almost))
+        # 券商推算微尾差（99.95 vs 100.0，quality != 直接披露）须由 Agent 自行轧平
+        broker_tiny = hist_errors(deps, _hist_draft({"智能手机": 99.95, "其他": 10.0}))
+        self.assertTrue(any("直接在子项中轧平" in item for item in broker_tiny))
+        # 子项加总超过父项（负残差）必须拦截
+        over_parent = hist_errors(deps, _hist_draft({"智能手机": 100.05, "其他": 9.95}))
+        self.assertTrue(any("超过年报父项" in item for item in over_parent))
+        # 年报直接披露的子项加总不等时，允许保留差额由程序补齐 XX其他
+        direct_draft = _hist_draft({"智能手机": 99.95, "其他": 10.0})
+        for seg in direct_draft.segments:
+            if seg.name == "智能手机":
+                seg.years[0].quality = "直接披露"
+        self.assertEqual(hist_errors(deps, direct_draft), [])
+
+    def test_plug_parent_residual_handles_renamed_parent_across_years(self):
+        rows = [{"period": "2025A", "name": "集成电路晶圆制造代工", "revenue_yi": 100.0}]
+        segs = [
+            {
+                "name": "智能手机",
+                "parent": "集成电路晶圆制造代工",
+                "historical_revenue": {"2024A": 70.0, "2025A": 80.0},
+                "source_refs": ["S1"],
+            },
+            {
+                "name": "其他",
+                "parent": "",
+                "historical_revenue": {"2024A": 30.0, "2025A": 10.0},
+                "source_refs": ["S1"],
+            },
+        ]
+        plugged, added = plug_parent_residuals(
+            segs, ["2024A", "2025A"], rows, ["集成电路晶圆制造代工"], last_total=110.0
+        )
+        self.assertEqual(added, ["集成电路晶圆制造代工其他"])
+        plug_row = next(item for item in plugged if item["name"] == "集成电路晶圆制造代工其他")
+        self.assertEqual(plug_row["historical_revenue"], {"2024A": 0.0, "2025A": 20.0})
 
     def test_missing_company_residual_fails_before_fill(self):
         deps = HistFillDeps(
@@ -445,6 +480,11 @@ class GrowthRateTests(unittest.TestCase):
         card = require_forecast(_growth_payload(0.18, 10.0), facts, notes_seg=notes)
         self.assertAlmostEqual(card["final_forecast"]["收入增速"]["2026E"], 0.18)
         self.assertEqual(validate_forecast(_growth_payload(1.2, 10.0), facts, notes), [])
+        # 当说明写 3.5% 而字段误填 3.5（350%）时，应拦截提示改为小数
+        misscaled = _growth_payload(3.5, 10.0)
+        misscaled["final_rationale"] = "2026E成熟业务预计温和增长3.5%。"
+        mis_errors = validate_forecast(misscaled, facts, notes)
+        self.assertTrue(any("请改为小数" in item for item in mis_errors), mis_errors)
 
     def test_zero_base_rejected(self):
         facts = _facts()
@@ -710,9 +750,7 @@ def _hist_draft(amounts: dict[str, float]) -> HistFill:
             for name, amount in amounts.items()
         ],
         split_logic="测",
-        hist_data_note="测",
         other_note="测",
-        sources_text="测",
         final_rationale="测",
     )
 

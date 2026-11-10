@@ -19,20 +19,26 @@ VECTOR_SNIPPET = 16000
 TOTAL_NAMES = frozenset({"合计", "总计", "主营业务合计", "分部合计"})
 REPORT_TYPES = frozenset({"REPORT", "FOREIGN_REPORT"})
 IMAGE_TYPES = frozenset({"IMAGE"})
-_G_OK = frozenset({40.0, 50.0, 100.0, 200.0, 400.0, 800.0})
-_SEGMENT = ("分业务", "分产品", "分部", "业务线", "分项收入", "营收拆分", "收入拆分", "按传输速率")
-_PNL = ("销售费用", "管理费用", "研发费用", "税金及附加")
-_FORECAST_PAGE = (
-    "盈利预测",
-    "利润表",
-    "损益表",
-    "预测指标",
-    "主要财务比率",
-    "Income statement",
-    "Income Statement",
+_SEGMENT = (
+    "分业务",
+    "分产品",
+    "分部",
+    "业务线",
+    "分项收入",
+    "营收拆分",
+    "收入拆分",
+    "收入构成",
+    "主营构成",
 )
-_SPEC = re.compile(r"(?<![A-Za-z0-9.])(\d+(?:\.\d+)?(?:G|T))(?![A-Za-z])", re.I)
-_SPEC_DENY = frozenset({"2G", "3G", "4G", "5G", "6G"})
+_PNL = (
+    "销售费用",
+    "管理费用",
+    "研发费用",
+    "税金及附加",
+    "资产总计",
+    "负债合计",
+    "少数股东损益",
+)
 
 
 def run_live_split(run_dir: Path) -> dict[str, Any]:
@@ -67,12 +73,9 @@ def run_live_split(run_dir: Path) -> dict[str, Any]:
         )
         plan = run_revenue_split(deps)
         dump_json(log_root / "split_plan_raw.json", plan.model_dump())
-        if deps.draft:
-            dump_json(log_root / "split_caliber_raw.json", deps.draft.model_dump())
         all_hits = list(deps.hits)
         vector_hits = _dedupe_vector(all_hits)[:MAX_VECTOR]
         queries = deps.queries
-        draft_dump = deps.draft.model_dump() if deps.draft else {}
 
     payload = {
         "company": company,
@@ -80,10 +83,10 @@ def run_live_split(run_dir: Path) -> dict[str, Any]:
         "ts": as_of,
         **plan.model_dump(),
     }
-    canonical = require_split_plan(payload, hits=all_hits)
+    canonical = require_split_plan(
+        payload, hits=all_hits, official_rows=list(official.get("rows") or [])
+    )
     dump_json(spec_dir(run_dir) / "split_plan.json", canonical)
-    if draft_dump:
-        dump_json(spec_dir(run_dir) / "split_caliber.json", {"company": company, "ticker": ticker, "ts": as_of, **draft_dump})
     pack = {
         "company": company,
         "ticker": ticker,
@@ -96,12 +99,11 @@ def run_live_split(run_dir: Path) -> dict[str, Any]:
             "营业收入": revenue,
         },
         "official_segments": official,
-        "split_caliber": draft_dump,
         "split_plan": canonical,
         "vector_queries": queries,
         "vector_hits": vector_hits,
         "constraints": {
-            "goal": "先确认券商口径，再按该口径查数、合并过细行，不选方法",
+            "goal": "确认券商口径后直接锁定名单，历史收入由后续阶段补搜回填，不按取数情况删行",
             "numbers_out_of_scope": "不填历史金额、不填预测数字",
         },
     }
@@ -159,27 +161,23 @@ def run_split_smoke(
         all_hits = list(deps.hits)
         vector_hits = _dedupe_vector(all_hits)[:MAX_VECTOR]
         queries = deps.queries
-        draft_dump = deps.draft.model_dump() if deps.draft else {}
 
     payload = {"company": company, "ticker": ticker, "ts": as_of, **plan.model_dump()}
-    canonical = require_split_plan(payload, hits=all_hits)
+    canonical = require_split_plan(
+        payload, hits=all_hits, official_rows=list(official.get("rows") or [])
+    )
     plan_path = root / "split_plan.json"
-    caliber_path = root / "split_caliber.json"
     dump_json(plan_path, canonical)
-    if draft_dump:
-        dump_json(caliber_path, {"company": company, "ticker": ticker, "ts": as_of, **draft_dump})
     pack = {
         "company": company,
         "ticker": ticker,
         "full_code": resolved,
         "as_of": as_of,
         "official_segments": official,
-        "split_caliber": draft_dump,
         "split_plan": canonical,
         "vector_queries": queries,
         "vector_hits": vector_hits,
         "plan_path": str(plan_path),
-        "caliber_path": str(caliber_path) if draft_dump else "",
     }
     dump_json(root / "logs" / "evidence" / "split_pack.json", pack)
     dump_json(root / "logs" / "search_log.json", calls)
@@ -325,33 +323,8 @@ def _mcp_search(mcp: ComeinClient, calls: list[dict[str, Any]], log_root: Path):
 
 
 def _harvest_specs(*texts: str) -> list[str]:
-    counts: dict[str, int] = {}
-    for text in texts:
-        for match in _SPEC.finditer(str(text or "")):
-            token = match.group(1)
-            unit = token[-1].upper()
-            token = token[:-1] + unit
-            if token in _SPEC_DENY:
-                continue
-            number = _spec_number(token)
-            if token.endswith("T") and not 0 < number <= 8:
-                continue
-            if token.endswith("G") and number not in _G_OK:
-                continue
-            counts[token] = counts.get(token, 0) + 1
-    ranked = sorted(
-        counts.items(),
-        key=lambda item: (item[1], 1 if item[0].endswith("T") else 0, _spec_number(item[0])),
-        reverse=True,
-    )
-    return [token for token, _ in ranked[:5]]
-
-
-def _spec_number(token: str) -> float:
-    try:
-        return float(token[:-1])
-    except ValueError:
-        return 0.0
+    del texts
+    return []
 
 
 def _latest_year(official: dict[str, Any]) -> str:
@@ -482,12 +455,10 @@ _LINE_INCOME = re.compile(r"(?:业务|设备|产品|器件|板块).{0,12}(?:营�
 
 
 def _is_forecast_sheet(text: str) -> bool:
-    """公司合计利润表丢掉。正文里已有分业务/分项收入的切片留下。"""
+    """仅过滤纯公司级三表附表；含分业务/分项收入或正常盈利预测讨论的切片保留。"""
     if any(token in text for token in _SEGMENT) or _LINE_INCOME.search(text):
         return False
-    if any(token in text for token in _FORECAST_PAGE):
-        return True
-    if sum(token in text for token in _PNL) >= 2 and "营业收入" in text:
+    if sum(token in text for token in _PNL) >= 3 and "营业收入" in text:
         return True
     return False
 

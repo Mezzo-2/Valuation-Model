@@ -1,4 +1,4 @@
-"""确认 split_plan 后，由模型补搜并拍出历史分部收入。代码只校验，不代填。"""
+"""确认 split_plan 后补搜历史收入；无依据的兜底零子项在预测前退回年报父项。"""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
 
@@ -19,9 +20,9 @@ from valuation.segment_split.split_plan import (
     is_residual_name,
     money,
     money_sum,
-    normalize_caliber,
     normalize_split_plan,
     plug_parent_residuals,
+    resolve_unsupported_children,
     same_money,
 )
 from valuation.segment_split.split_agent import SearchTurn, _compact_hits, _log, _log_messages
@@ -32,6 +33,7 @@ from valuation.segment_split.schema import (
     REVENUE_SCOPE,
     SchemaError,
     require_split,
+    t_recon,
 )
 from valuation.shared.env import build_chat_model
 from valuation.shared.io import dump_json, load_json, logs_dir, spec_dir
@@ -70,9 +72,7 @@ class HistFill(BaseModel):
     )
     segments: list[HistSeg]
     split_logic: str
-    hist_data_note: str = ""  # 兼容旧回填卡；结构变化由历史数确定
     other_note: str
-    sources_text: str = ""  # 兼容旧回填卡；来源文件改用结构化清单
     source_documents: list[SourceDocument] = Field(default_factory=list)
     final_rationale: str = ""
 
@@ -168,9 +168,10 @@ def _fill_instructions(ctx: RunContext[HistFillDeps]) -> str:
         )
     else:
         recon = (
-            "子项只填自己的收入。名单里没有父口径其他；父项没被子项盖住的差额不要写入任何已锁定分部，"
-            f"也不要为了轧平去改子项。回填后程序按年报父项减去子项合计补行。"
-            f"因此已锁定分部加总可以小于该年{REVENUE_SCOPE}，少掉的部分应等于这些父项缺口。\n"
+            "名单里未预留父口径其他。若各子项在业务构成上已完整覆盖该年报父项，"
+            "券商因四舍五入或占比推算产生的微小尾差须由你在子项中直接消化轧平，使子项加总严格等于年报父项，且子项加总不得超过年报父项。"
+            "仅当年报或研报只披露了父项下的部分子业务（确有未单列的其余业务），或子项均为年报直接披露且加总小于父项时，"
+            f"子项才按各自金额填写并留出正向差额，回填后由程序自动补上父口径其他（此时已锁定分部加总可小于该年{REVENUE_SCOPE}，差额等于这些父项未覆盖部分）。\n"
         )
     return (
         f"你是{deps.label}的历史拆分回填。名单已确认，只拍每个历史年的分部营业收入（{deps.amount_unit}）。\n"
@@ -179,16 +180,18 @@ def _fill_instructions(ctx: RunContext[HistFillDeps]) -> str:
         f"对账锚：{totals}。{recon}"
         f"年报行名会改，要判断是同一条、父口径合计，还是新行。"
         f"子项只填该叶子自己的收入；父项披露数原样抄进父项行。"
-        f"年报不再单列的叶子可以写 0。\n"
+        "年报未单列不等于收入为零。真实零收入须有业务尚未开展、已退出等来源依据。"
+        "若具名子项全部历史年都缺数据，不能伪造量价或把缺失称为真实零；"
+        "以兜底零占位并逐格说明缺口，程序将在预测前撤销该无依据下钻。"
+        "整个父项都无有效子项时恢复年报父项，按父项重新研究预测。\n"
         f"公司层差额（{REVENUE_SCOPE}减去各年报父项合计）只能写入「{company_slot}」。\n"
         f"年报抄得到就抄；券商表能对上已锁定子项也可以用。缺的年可以按结构推算。\n"
         "fill_method 必填，且只能是：官方抄录、卖方抄录、残差倒推、结构推算。\n"
         f"质量用：直接披露（年报原行）、有据可查（券商原表）、推算、倒推、兜底。why 逐格写取数依据，但不要重复套话。\n"
         "split_logic 具体解释采用哪些年报分部、为什么保留或下钻哪些业务，以及未单列业务的边界；不要抄逐年加总式。"
         "other_note 解释“其他”或父口径残差代表什么、哪些内容不能确定；不要重复逐年算式。"
-        "结构变化由程序根据已确认的历史金额计算，无需写到 hist_data_note。"
         "source_documents 只列实际用于本次拆分或金额回填的检索文件，标题、机构、日期须与 hits 完全对应；"
-        "年报接口记录无需填入，程序会单独列示。sources_text 留空。"
+        "年报接口记录无需填入，程序会单独列示。"
     )
 
 
@@ -222,9 +225,6 @@ def run_live_hist_fill(run_dir: Path) -> dict:
         item.get("name") for item in (raw_plan.get("segments") or []) if isinstance(item, dict)
     ]:
         dump_json(plan_path, plan)
-        caliber_path = root / "split_caliber.json"
-        if caliber_path.is_file():
-            dump_json(caliber_path, normalize_caliber(load_json(caliber_path)))
     if len(segs) < 2:
         raise SystemExit("split_plan 分部不足两行")
     official = _load_official(run_dir, facts)
@@ -279,14 +279,14 @@ def run_live_hist_fill(run_dir: Path) -> dict:
         removed = [name for name in before if name not in after]
         added = [name for name in after if name not in before]
         if removed:
-            print(f"historical_fill: 父项已顶满，去掉 {'、'.join(removed)}", flush=True)
+            print(f"historical_fill: 历史口径收口，去掉 {'、'.join(removed)}", flush=True)
         if added:
-            print(f"historical_fill: 子项未盖住父项，补上 {'、'.join(added)}", flush=True)
+            print(f"historical_fill: 历史口径收口，加入 {'、'.join(added)}", flush=True)
     return notes
 
 
 def _align_locked_names(run_dir: Path, segments: list[dict[str, Any]]) -> None:
-    """历史回填增删父口径其他后，拆分名单跟着收口。"""
+    """历史回填调整残差或撤销无依据下钻后，同步最终预测名单。"""
     rows = [
         {
             "name": str(item.get("name") or "").strip(),
@@ -295,11 +295,8 @@ def _align_locked_names(run_dir: Path, segments: list[dict[str, Any]]) -> None:
         for item in segments
         if str(item.get("name") or "").strip()
     ]
-    root = spec_dir(run_dir)
-    for filename in ("split_plan.json", "split_caliber.json"):
-        path = root / filename
-        if not path.is_file():
-            continue
+    path = spec_dir(run_dir) / "split_plan.json"
+    if path.is_file():
         data = load_json(path)
         data["segments"] = rows
         dump_json(path, data)
@@ -324,7 +321,7 @@ def compile_hist_fill(deps: HistFillDeps, *, model=None) -> HistFill:
     chat = model or build_chat_model()
     hint = ""
     last_errors: list[str] = []
-    for attempt in range(1, 4):
+    for attempt in range(1, 5):
         _log(deps, f"[hist] 写回填 第{attempt}次")
         result = fill_agent.run_sync(_fill_user(deps, hint), deps=deps, model=chat)
         _log_messages(deps, result.all_messages())
@@ -333,7 +330,8 @@ def compile_hist_fill(deps: HistFillDeps, *, model=None) -> HistFill:
         if not last_errors:
             return draft
         _log(deps, "[hist] 回填不合法：" + "；".join(last_errors))
-        hint = "回填不合法：" + "；".join(last_errors)
+        prev_json = json.dumps(draft.model_dump(), ensure_ascii=False)
+        hint = f"上次回填草稿：{prev_json}\n回填不合法：{'；'.join(last_errors)}。请基于上次草稿直接修正上述问题。"
     raise SchemaError(last_errors or ["写历史回填失败"])
 
 
@@ -406,6 +404,10 @@ def notes_from_draft(
             }
         )
     official_parents = [str(name).strip() for name in (plan.get("official_parents") or []) if str(name).strip()]
+    final_segments, resolutions = resolve_unsupported_children(
+        final_segments, hist, list(official.get("rows") or []), official_parents,
+        last_total=last_total,
+    )
     before_names = [str(item.get("name") or "") for item in final_segments]
     final_segments, added = plug_parent_residuals(
         final_segments,
@@ -458,6 +460,22 @@ def notes_from_draft(
                 for name in added:
                     if name not in source["segments_identified"]:
                         source["segments_identified"].append(name)
+    if resolutions:
+        from valuation.segment_split.presentation import split_logic
+        # 草稿仍会描述被撤销的零子项，按最终结构重建说明，避免旧口径流入研究。
+        notes["split_explanation"]["拆分逻辑"] = ""
+        explanation = split_logic(notes)
+        for decision in resolutions:
+            names = "、".join(decision["removed"])
+            action = f"恢复年报父项{decision['parent']}" if decision["collapsed"] else "保留其余有依据子项并重算父项差额"
+            explanation += f"{names}历史全为缺数据的兜底零，已撤销该下钻，{action}。"
+        notes["split_explanation"]["拆分逻辑"] = explanation
+        notes["split_explanation"]["其他业务说明"] = "仅保留有金额依据的父项差额及公司级收入差额；已撤销的子项不再独立预测。"
+        notes["final_rationale"] = explanation
+        notes["historical_resolution"] = resolutions
+        final_names = [seg["name"] for seg in final_segments]
+        for source in sources:
+            source["segments_identified"] = final_names.copy()
     for key in EXPLAIN_KEYS:
         if not str(notes["split_explanation"].get(key) or "").strip():
             notes["split_explanation"][key] = "见历史数据及来源清单。"
@@ -527,11 +545,32 @@ def hist_errors(deps: HistFillDeps, draft: HistFill) -> list[str]:
             amounts[name] = amount
             qualities[name] = cell.quality
             total += amount
-        gap = _unplugged_parent_gap(deps, year, amounts, parent_of, official)
-        if money_sum(list(amounts.values())) + gap != money(reported):
-            detail = f"加上未补的父项差额 {gap} " if gap != 0 else ""
+        gap, gap_parts = _unplugged_parent_gap_detail(deps, year, amounts, parent_of, official)
+        actual_sum = money_sum(list(amounts.values()))
+        if actual_sum + gap != money(reported):
+            company_res = next(
+                (
+                    name
+                    for name in deps.plan_names
+                    if is_residual_name(name, parent="", official_parents=official)
+                    and not parent_of.get(name)
+                ),
+                "",
+            )
+            detail = ""
+            if gap != 0:
+                breakdown = "、".join(f"{p}={g}" for p, g in gap_parts)
+                detail = f"加上未补的父项差额 {gap}（{breakdown}）"
+            other_hint = ""
+            if company_res and company_res in amounts:
+                non_res = money_sum([v for k, v in amounts.items() if k != company_res])
+                expected_other = money(reported) - non_res - gap
+                other_hint = (
+                    f"（未补父项差额将由程序自动补行，请勿计入「{company_res}」；"
+                    f"若其余分部金额不变，「{company_res}」在 {year} 应填 {expected_other}）"
+                )
             errors.append(
-                f"{year} 分部加总 {total} {detail}对不上 {REVENUE_SCOPE} {reported}"
+                f"{year} 分部加总 {actual_sum} {detail}对不上 {REVENUE_SCOPE} {reported}{other_hint}"
             )
         errors.extend(_parent_year_errors(deps, year, amounts, qualities, parent_of, official))
     if draft.fill_method not in FILL_METHODS:
@@ -550,17 +589,16 @@ def hist_errors(deps: HistFillDeps, draft: HistFill) -> list[str]:
     return errors
 
 
-def _unplugged_parent_gap(
+def _unplugged_parent_gap_detail(
     deps: HistFillDeps,
     year: str,
     amounts: dict[str, float],
     parent_of: dict[str, str],
     official: list[str],
-) -> Decimal:
+) -> tuple[Decimal, list[tuple[str, Decimal]]]:
     """名单还没有父口径其他时，父项披露数减去具名子项，留待回填后补行。"""
-    from decimal import Decimal
-
     gap = Decimal(0)
+    parts: list[tuple[str, Decimal]] = []
     for parent in official:
         members = [name for name in deps.plan_names if parent_of.get(name) == parent and name != parent]
         if not members:
@@ -571,7 +609,21 @@ def _unplugged_parent_gap(
         if official_amt is None:
             continue
         named = [amounts[name] for name in members if name in amounts]
-        gap += money(official_amt) - money_sum(named)
+        diff = money(official_amt) - money_sum(named)
+        gap += diff
+        if diff != 0:
+            parts.append((parent, diff))
+    return gap, parts
+
+
+def _unplugged_parent_gap(
+    deps: HistFillDeps,
+    year: str,
+    amounts: dict[str, float],
+    parent_of: dict[str, str],
+    official: list[str],
+) -> Decimal:
+    gap, _ = _unplugged_parent_gap_detail(deps, year, amounts, parent_of, official)
     return gap
 
 
@@ -633,6 +685,20 @@ def _parent_year_errors(
             errors.append(
                 f"{year} {parent} 子项加总 {money_sum(present)} 对不上年报父项 {official_amt}"
             )
+        elif not has_plug:
+            named_children = [name for name in members if name != parent and name in amounts]
+            if named_children:
+                named_sum = money_sum([amounts[name] for name in named_children])
+                gap = money(official_amt) - named_sum
+                all_direct = all(qualities.get(name) == "直接披露" for name in named_children)
+                if gap < 0:
+                    errors.append(
+                        f"{year} {parent} 子项加总 {named_sum} 超过年报父项 {official_amt}，请消化券商四舍五入尾差或核对口径"
+                    )
+                elif 0 < gap <= money(t_recon(official_amt)) and (not all_direct or gap <= Decimal("0.01")):
+                    errors.append(
+                        f"{year} {parent} 子项加总 {named_sum} 与年报父项 {official_amt} 仅相差 {gap}，属于四舍五入或推算尾差，请直接在子项中轧平"
+                    )
         for name in members:
             if name == parent:
                 continue
@@ -764,9 +830,16 @@ def _fill_user(deps: HistFillDeps, hint: str) -> str:
     totals = "；".join(
         f"{year}={amount}" for year, amount in zip(deps.hist_periods, deps.revenue)
     )
+    parent_map = "；".join(
+        f"{item.get('name')}（挂靠父口径：{item.get('parent') or '无，属公司级残差'}）"
+        for item in deps.plan_segments
+        if item.get("name")
+    )
     text = (
         f"检索结束。按已锁定名单拍出每个历史年的分部收入（{deps.amount_unit}）。\n"
         f"分部：{'、'.join(deps.plan_names)}\n"
+        f"分部挂靠关系：{parent_map}\n"
+        f"年报父口径名单：{'、'.join(deps.official_names) or '无'}\n"
         f"历史年：{'、'.join(deps.hist_periods)}\n"
         f"{REVENUE_SCOPE}对账：{totals}\n"
         f"年报：{_official_text(deps)}\n"
@@ -781,15 +854,13 @@ def _fill_user(deps: HistFillDeps, hint: str) -> str:
 def _query_errors(deps: HistFillDeps, query: str) -> list[str]:
     text = str(query or "").strip()
     errors: list[str] = []
+    if not text:
+        errors.append("问句不能为空")
+        return errors
     if deps.company not in text and deps.ticker not in text:
         errors.append(f"问句须包含公司名或代码（{deps.label}）")
-    if _FORECAST_HINT.search(text):
-        errors.append("问句不要写盈利预测或利润表")
-    for year in deps.forecast_years:
-        if year and year in text:
-            errors.append(f"问句不要写入预测年 {year}")
     named = any(name and name in text for name in deps.plan_names)
-    topical = any(token in text for token in ("分业务", "分产品", "分部", "营收", "收入"))
+    topical = any(token in text for token in ("分业务", "分产品", "分部", "营收", "收入", "主营"))
     if not named and not topical:
         errors.append("问句须点已锁定分部，或写分产品/分业务收入")
     return errors

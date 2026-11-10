@@ -339,7 +339,7 @@ def _fill_one(
             mcap = mcap / YUAN_PER_YI
     valuation = price.get("valuation") or {}
     pe_y1 = _as_float(valuation.get("peForward"))
-    if pe_y1 is not None and pe_y1 <= 0:
+    if pe_y1 is not None and (not math.isfinite(pe_y1) or pe_y1 <= 0):
         pe_y1 = None
     pe_ttm = _as_float(valuation.get("peTtm"))
     if pe_ttm is None:
@@ -357,6 +357,7 @@ def _fill_one(
         "eps_scope": valuation.get("peForwardBasis"),
         "forecast_period": valuation.get("forwardFiscalYear"),
         "pe_source": "pricePerformance.valuation.peForward" if pe_y1 is not None else None,
+        "financials": _peer_financials(snapshot),
     }
     requested = set(re.findall(r"[\u4e00-\u9fff]", str(row.get("name") or "")))
     actual = set(re.findall(r"[\u4e00-\u9fff]", str(info.get("assetName") or price_info.get("stockShortName") or "")))
@@ -364,6 +365,22 @@ def _fill_one(
         result.update(source_pe_y1=pe_y1, pe_y1=None, thin=True,
                       data_gap=f"候选名称{row['name']}与接口证券{name}（{ticker}）不匹配")
     return result
+
+
+def _peer_financials(snapshot: dict) -> dict:
+    """只摘取实际返回的指标，保留期间和单位供 Agent 区分口径。"""
+    labels = {"营业收入", "归母净利润", "扣非归母净利润", "营收同比", "归母净利润同比",
+              "毛利率", "净利率", "ROE", "ROIC", "资产负债率", "经营活动现金流量净额"}
+    info = snapshot.get("standardizedInfo") or {}
+    metrics = []
+    for item in snapshot.get("snapshotItems") or []:
+        if not isinstance(item, dict) or item.get("name_cn") not in labels:
+            continue
+        value = _as_float(item.get("value"))
+        if value is not None and math.isfinite(value):
+            metrics.append({"name": item["name_cn"], "value": value, "unit": item.get("unit")})
+    return {"period": info.get("report_type"), "published": info.get("publishDate"),
+            "source": "get_financial_snapshot", "metrics": metrics}
 
 
 def _chunks(items: list[str], size: int) -> list[list[str]]:

@@ -1,6 +1,6 @@
 """主营业务拆分 / 一致预期的规范表。
 
-各阶段和人审只写这一套。workbook 通过 adapt 翻译后出表。
+各阶段只写这一套。workbook 通过 adapt 翻译后出表。
 旧字段在 normalize_* 里升级，不另发明第三套。
 """
 
@@ -41,6 +41,17 @@ RECON_ABS = 0.1
 COVERAGE = frozenset({"complete", "partial", "unavailable"})
 SOURCE_MODES = frozenset({"institution_median", "provider_aggregate", "none"})
 METRIC_COVERAGE = frozenset({"robust", "thin", "unavailable"})
+
+
+def unsupported_zero_history(seg: dict, periods: list[str]) -> bool:
+    """全历史兜底零是缺数据占位，不能作为独立预测业务。真实披露零不在此列。"""
+    revenue = seg.get("historical_revenue") or {}
+    quality = seg.get("data_quality") or {}
+    return bool(periods) and all(
+        _is_number(revenue.get(year)) and revenue[year] == 0
+        and quality.get(year) == "兜底"
+        for year in periods
+    )
 
 
 class SchemaError(ValueError):
@@ -156,6 +167,8 @@ def validate_split(payload: dict, facts: dict, *, require_method: bool = False) 
     revenue = facts["income"][REVENUE_SCOPE]
     for seg in segs:
         name = str(seg.get("name") or "").strip()
+        if unsupported_zero_history(seg, hist):
+            errors.append(f"{name} 历史全为兜底零，须补齐证据或退回年报父项，不能进入预测")
         method = canonical_method(seg.get("预测方法") or "")
         if require_method:
             if method not in METHODS:

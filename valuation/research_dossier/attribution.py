@@ -121,7 +121,14 @@ def _split_brief_rows(
 
 
 def _maybe_caliber(cons: dict, snap: dict, year: str) -> bool:
-    del cons, snap, year
+    del year
+    if snap.get("eps_scope") == "SBCOC":
+        return True
+    rev_gap = cons.get("rev_gap")
+    eps_gap = cons.get("eps_gap")
+    if rev_gap is not None and eps_gap is not None:
+        if (rev_gap > 0.05 and eps_gap < -0.05) or (rev_gap < -0.05 and eps_gap > 0.05):
+            return True
     return False
 
 

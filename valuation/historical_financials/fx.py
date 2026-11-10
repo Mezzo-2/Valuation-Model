@@ -14,7 +14,7 @@ SOURCE = "中国外汇交易中心"
 TOOL = "get_economic_indicator_data"
 # 每一单位外币兑换的人民币；仅接入已明确方向的每日中间价序列。
 INDICATORS = {"HKD": "中间价:港元兑人民币", "USD": "中间价:美元兑人民币"}
-MAX_AGE_DAYS = 1
+MAX_AGE_DAYS = 10
 
 
 def run_date() -> date:
@@ -52,14 +52,14 @@ def parse_fixing_rates(raw: dict, indicator: str, as_of: date) -> dict[date, flo
             value = float(cells[1].replace(",", ""))
         except ValueError:
             continue
-        # 当天优先，缺失仅回退前一个自然日；接口超范围返回的日期在此排除。
+        # 当天优先，周末或节假日回退至近 MAX_AGE_DAYS 自然日内的有效交易日；接口超范围返回的日期在此排除。
         if not 0 <= (as_of-day).days <= MAX_AGE_DAYS or not number(value) or value <= 0:
             continue
         if day in rates and rates[day] != value:
             raise ValueError("同日汇率值冲突")
         rates[day] = value
     if not rates:
-        raise ValueError("运行当天及前一天均没有可用的日频中间价")
+        raise ValueError("运行当天及近期交易日均没有可用的日频中间价")
     return rates
 
 
@@ -104,7 +104,7 @@ def fetch_fx_conversions(
         cny_per_quote = 1.0 if quote == "CNY" else legs[quote][day]
         result.append({"base": base, "quote": quote, "rate": cny_per_base/cny_per_quote,
             "date": day.isoformat(), "as_of": as_of.isoformat(), "source": SOURCE,
-            "tool": TOOL, "method": "运行当天优先，缺失回退前一天；交叉汇率使用同日中间价",
+            "tool": TOOL, "method": "运行当天优先，节假日或周末回退至最近有效交易日；交叉汇率使用同日中间价",
             "raw_quotes": raw_sources,
             "retrieved_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds")})
     return result

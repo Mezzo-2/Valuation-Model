@@ -4,7 +4,7 @@ import unittest
 
 from valuation.comein.http import _sse_is_result
 from valuation.historical_financials.company_info import build_company_info, market_rows, profile_rows
-from valuation.historical_financials.fetch import _compact_balance, _compact_income, _fill_absent_cells
+from valuation.historical_financials.fetch import _compact_balance, _compact_income, _fill_absent_cells, _require_income
 from valuation.operating_cost.schema import normalize_cost, validate_cost
 from valuation.peer_valuation.peer_agent import _coverage_gaps
 from valuation.peer_valuation.schema import normalize_comps, validate_comps
@@ -32,6 +32,18 @@ class FetchPartialYearTests(unittest.TestCase):
         balance = {"短期借款": [10.0, None, 20.0]}
         _compact_balance(balance, 3, notes)
         self.assertEqual(balance["短期借款"], [10.0, 0.0, 20.0])
+
+    def test_require_income_derives_minority_from_net_minus_parent(self):
+        notes: dict[str, str] = {}
+        by_year = {
+            2023: {
+                "净利润": (0, 1.3489, "利润表"),
+                "归母净利润": (0, 1.3489, "利润表"),
+            }
+        }
+        val = _require_income(by_year, 2023, "少数股东损益", notes)
+        self.assertEqual(val, 0.0)
+        self.assertEqual(notes.get("少数股东损益"), "由净利润 − 归母净利润派生")
 
 
 class ConsensusMedianTests(unittest.TestCase):
@@ -99,6 +111,9 @@ class CostAndCompsValidationTests(unittest.TestCase):
         neg = dict(card)
         neg["minority"] = {"2026E": -0.027}
         self.assertEqual(validate_cost(neg, facts), [])
+        neg_tax = dict(card)
+        neg_tax["tax_rate"] = {"2026E": -0.05}
+        self.assertEqual(validate_cost(neg_tax, facts), [])
 
     def test_pe_adjust_and_currency(self):
         facts = {"as_of": "2026-09-01"}

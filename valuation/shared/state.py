@@ -26,16 +26,15 @@ def new_state(
     *,
     ticker: str,
     company: str,
-    auto_approve: bool,
+    dcf_enabled: bool = True,
 ) -> dict[str, Any]:
     return {
         "run_id": run_id,
         "ticker": ticker,
         "company": company,
-        "auto_approve": auto_approve,
+        "dcf_enabled": dcf_enabled,
         "current_stage": "init",
         "status": "running",
-        "waiting_for": None,
         "completed": [],
         "gates": {},
         "workbook": None,

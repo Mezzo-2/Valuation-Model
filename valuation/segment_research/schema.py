@@ -168,6 +168,14 @@ def validate_forecast(
                 errors.append(
                     f"{field}.{year} 须为小数且绝对值不超过 {GROWTH_ABS_CAP}，实际 {value}"
                 )
+            elif field in GROWTH_FIELDS and 1.0 < abs(number) <= GROWTH_ABS_CAP:
+                rationale = str(payload.get("final_rationale") or "")
+                pct_tokens = {f"{abs(number):g}%", f"{abs(number):.1f}%", f"{abs(number):.2f}%"}
+                high_tokens = {f"{abs(number) * 100:.0f}%", f"{abs(number) * 100:.1f}%", "翻倍", "倍增"}
+                if any(tok in rationale for tok in pct_tokens) and not any(tok in rationale for tok in high_tokens):
+                    errors.append(
+                        f"{field}.{year} 填了 {value}（代表 {number * 100:.0f}%），与说明中的百分数不符，请改为小数 {number / 100:.4g}"
+                    )
     return errors
 
 

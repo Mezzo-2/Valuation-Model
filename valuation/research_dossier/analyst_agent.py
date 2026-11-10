@@ -23,6 +23,8 @@ from valuation.shared.houses import strip_inline_cites
 from valuation.shared.io import load_json, spec_dir
 
 REWRITE = (
+    ("model_pe_reason", "模型给定PE的依据"),
+    ("model_pe", "模型给定PE"),
     ("【事件发酵】", "行业与订单"),
     ("【卖方假设】", "卖方怎么看"),
     ("【我们的数】", "本模型怎么取"),
@@ -92,12 +94,26 @@ def _dossier_instructions(ctx: RunContext[AnalystDeps]) -> str:
     price_unit = deps.snapshot.get("trading_currency") or "元"
     eps_unit = deps.snapshot.get("eps_unit") or "元"
     amount_unit = deps.snapshot.get("amount_unit") or "亿元"
+    valuation = deps.snapshot.get("valuation") or {}
+    pe_judgment = valuation.get("model_pe_reason") or "旧版任务沿用同业池均值，未生成模型独立PE判断。"
+    pe_method_note = ("本次采用估值Agent独立给定的基础PE。只解释本次实际采用的参照和判断。"
+                      if valuation.get("pe_basis_source") == "model" else
+                      "本次为旧版任务复现，基础PE沿用同业池均值，不能写成已完成独立PE判断。")
     from valuation.shared.markets import valuation_fx_note
     fx_note = valuation_fx_note(deps.snapshot)
+    dcf_line = ""
+    if deps.snapshot.get("dcf"):
+        from valuation.dcf.calculate import narrative
+        dcf_line = ("\n估值与评级章必须增加### DCF交叉验证，用一至两段引用锁定的DCF价格、WACC、g、终值占比并解释与PE的差异，重点简述Capex判断及主要来源；其他参数不逐项写判断依据，不罗列所有未决事项。重大限制合并简短说明。采用中文财务术语，不出现JSON字段名或接口内部状态名。"
+                    "不得平均两种价格或替换PE主目标价。关键输入未确认时写具体原因，不补造价格。\n"
+                    + narrative(deps.snapshot["dcf"]))
     return f"""你是{deps.label}的公司研究分析师。根据注入的模型结果和已有研究材料，写一篇能复核关键判断的底稿，并在同一次输出中填写 thesis、outlook、risks。
 
 数字已经锁死。营收、EPS、毛利率、费用率、目标PE、目标价、较现价空间、评级必须用注入的 display 数字。
 评级必须是「{display['rating']}」，目标价 {display['target_price']} {price_unit}，预测首年 EPS {display['eps_y1']} {eps_unit}，目标PE {display['target_pe']} 倍。
+合理PE的已确定依据：{pe_judgment}
+{pe_method_note}
+模型给定PE是基础倍数，目标PE还包含中性情景调整系数；使用注入结果，不能把同业均值或中位数替换为目标PE，也不能重新选择倍数。
 估值换算说明：{fx_note or '沿用注入结果，不自行另取汇率或重复换算。'}
 
 券商用简称，例如广发证券；只点名材料里确有来源的机构，现有券商包括 {houses}。来源、日期、适用期间只从注入材料取，不要编造原文页码或报告日期。关键的最新实际、机构预测或有争议的事实，在相关判断旁用括号写明材料标题或披露者、资料日期和适用期间；不另列证据台账或数据来源章。材料不足时写出具体待验证事项，不用确定语气补足。
@@ -109,7 +125,8 @@ def _dossier_instructions(ctx: RunContext[AnalystDeps]) -> str:
 3. 投资逻辑：必须有 ### 主线、### 分歧归因、### 与市场的分歧、### 目标价口径。主线、分歧和目标价口径用编号分点：每条先写不超过16字的短标题，再写一句带锁定数字的论据。短标题是机制或结构（谁赚钱、哪块放量、和一致预期差在哪、估值口径），一条一个完整判断。分歧归因先写资料时效和口径，再写收入或利润差在哪个分部或利润率；{fcst_years} 的数字写进句子里。{gap_line}
 4. 业务展望：按分部设小标题。先 ### 收入结构。核心分部是 {core}，每个核心分部一个 ### 标题，说明量价、订单、产能或其他适用驱动怎样传到收入；尾部分部 {tail} 合成一个 ###。把没有验证的驱动说成假设。
 5. 盈利预测：先放一张历史+预测简表，再用 ### 拐点与斜率 按机制写：毛利率、费用率、利润是否快于收入、相对一致预期。区分计算关系与尚未建立桥接的解释。
-6. 估值与评级：### 同业选取、### 目标价与评级。同业为什么这几家（业务优先）、目标 PE 取均值（或调整）的理由、目标价是当前合理价格（首年 EPS × 目标 PE），并对照现价隐含 EPS。数字必须等于注入结果。若同业倍数明显分散，明说均值受哪些样本影响，不把高倍数自动删除。
+6. 估值与评级：### 同业选取、### 目标价与评级。同业为什么这几家（业务优先），模型给定PE主要参考哪些样本、本公司的合理定位及高低倍数样本的使用局限，沿用注入的判断、计算模式和来源。目标价是当前合理价格（首年 EPS × 目标 PE），并对照现价隐含 EPS。数字必须等于注入结果。若同业倍数明显分散，说明其原因或尚未确认之处，不能把留在池中等同于必须等权定价。
+{dcf_line}
 7. 反证与跟踪：必须有 ### 替代解释 和 ### 跟踪指标。至少讨论一项最可能推翻主线的相反解释或材料，说明若成立先修改哪个销量、价格、毛利率或估值假设，再影响哪年 EPS 或目标价；给出下一次可观察指标、时间窗口和触发调整的条件。不要只是重复风险名称。
 8. 主要风险：分点写能打穿上述逻辑的判断。每条「短标题。触发情景和对盈利或目标价的方向」。八章写完即止。
 
@@ -150,12 +167,14 @@ def compile_dossier(deps: AnalystDeps, *, model=None) -> tuple[str, dict]:
         except ValueError as exc:
             last_errors = [str(exc)]
             _log(deps, "[analyst] 总结不合法：" + "；".join(last_errors))
-            hint = "底稿与总结须一次输出，且总结要有投资逻辑、展望、风险。不合法：" + "；".join(last_errors)
+            prev_json = json.dumps(result.output.model_dump(), ensure_ascii=False)
+            hint = f"上次草稿：{prev_json}\n底稿与总结须一次输出，且总结要有投资逻辑、展望、风险。不合法：{'；'.join(last_errors)}"
             continue
         last_errors = validate_dossier(markdown, deps.snapshot, notes)
         if last_errors:
             _log(deps, "[analyst] 底稿或总结不合法：" + "；".join(last_errors))
-            hint = "不合法：" + "；".join(last_errors)
+            prev_json = json.dumps(result.output.model_dump(), ensure_ascii=False)
+            hint = f"上次草稿：{prev_json}\n请直接在上述草稿基础上修正以下问题，保持其余合规内容不变：{'；'.join(last_errors)}"
             continue
         _persist_draft(deps, markdown)
         return markdown, notes
@@ -180,7 +199,10 @@ def format_pack(snapshot: dict, spec: dict, run_dir: Path | None = None) -> str:
             "核心池PE均值": display["pe_mean"],
             "预测首年": snapshot["y1"],
             "预测首年EPS": display["eps_y1"],
-            "目标PE是否取均值不调整": snapshot["valuation"].get("pe_adjust_is_one"),
+            "模型给定PE": display.get("model_pe"),
+            "估值基础PE": display.get("pe_base", display["pe_mean"]),
+            "中性情景调整系数": snapshot["valuation"].get("pe_adjust"),
+            "PE基础来源": "模型独立判断" if snapshot["valuation"].get("pe_basis_source") == "model" else "旧版模型：同业池均值",
         },
         "核心分部": snapshot.get("core_segments"),
         "尾部分部": snapshot.get("tail_segments"),
@@ -214,6 +236,8 @@ def format_pack(snapshot: dict, spec: dict, run_dir: Path | None = None) -> str:
         "同业核心池": display.get("core_pe"),
         "同业PE中位数_仅作分散度诊断": round(median(peer_pes), 1) if peer_pes else None,
         "同业选取说明": _rewrite(snapshot.get("comps_rationale") or ""),
+        "模型给定PE依据": _rewrite(snapshot["valuation"].get("model_pe_reason") or ""),
+        "估值补查实际使用来源": snapshot["valuation"].get("model_pe_sources") or [],
         "拆分逻辑": snapshot.get("split_logic") or "",
         "成本怎么取": _rewrite(snapshot.get("cost_rationale") or ""),
         "各分部说明": [
@@ -239,6 +263,11 @@ def format_pack(snapshot: dict, spec: dict, run_dir: Path | None = None) -> str:
         conclusions["现价"] = conclusions.pop("现价_元")
         for year, row in payload["盈利简表"].items():
             row["SG&A费用率_百分数"] = _pct(snapshot["pnl"][year].get("sga_ratio"))
+    if snapshot.get("dcf"):
+        payload["DCF交叉验证"] = snapshot["dcf"]
+        dcf_inputs = snapshot.get("dcf_inputs") or {}
+        payload["DCF输入及依据"] = {k: dcf_inputs.get(k) for k in
+            ('cashflow','terminal','capital_cost','bridge','capex_note','capex_references','rationale','open_gaps')}
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 

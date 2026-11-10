@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from valuation.research_dossier.analyst_agent import AnalystDeps, compile_dossier, format_pack
+from valuation.research_dossier.attribution import write_attribution
 from valuation.research_dossier.snapshot import build_snapshot
 from valuation.shared.cli import run_dir_arg
 from valuation.shared.io import dossier_path, dump_json, spec_dir
@@ -11,6 +12,7 @@ from valuation.workbook.load_json import load_spec
 def main() -> int:
     run_dir, _ = run_dir_arg()
     load_state(run_dir)
+    write_attribution(run_dir)
     spec = load_spec(run_dir, require_notes=False)
     snapshot = build_snapshot(run_dir)
     facts = spec["facts"]
